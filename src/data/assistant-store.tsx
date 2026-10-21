@@ -1,26 +1,31 @@
 import { createContext, useContext, useMemo, useState, type PropsWithChildren } from 'react';
 
-import { initialAttendance, initialSessions, type AssistantAttendance, type AssistantSession, type SessionStatus } from './assistant-sessions';
+import { initialAssistantAttendance, initialAssistantSessions } from '@/data/assistant-sessions';
+import type { AttendanceRecord, PracticeSession, SessionStatus } from '@/types';
 
-type AssistantStoreValue = {
-  sessions: AssistantSession[];
-  attendance: AssistantAttendance[];
+interface AssistantStoreValue {
+  sessions: PracticeSession[];
+  attendance: AttendanceRecord[];
   setSessionStatus: (sessionId: string, status: SessionStatus) => void;
-};
+}
 
 const AssistantStore = createContext<AssistantStoreValue | null>(null);
 
+/** State sesi khusus demonstrasi alur asisten dan berbagi antarrute asisten. */
 export function AssistantStoreProvider({ children }: PropsWithChildren) {
-  const [sessions, setSessions] = useState(initialSessions);
-  const [attendance] = useState(initialAttendance);
-  const value = useMemo(
+  const [sessions, setSessions] = useState(initialAssistantSessions);
+  const [attendance] = useState(initialAssistantAttendance);
+
+  const value = useMemo<AssistantStoreValue>(
     () => ({
       sessions,
       attendance,
-      setSessionStatus: (sessionId: string, status: SessionStatus) => {
-        setSessions((current) => current.map((session) =>
-          session.id === sessionId ? { ...session, status } : session,
-        ));
+      setSessionStatus: (sessionId, status) => {
+        setSessions((current) =>
+          current.map((session) =>
+            session.id === sessionId ? { ...session, status } : session,
+          ),
+        );
       },
     }),
     [sessions, attendance],
@@ -31,6 +36,8 @@ export function AssistantStoreProvider({ children }: PropsWithChildren) {
 
 export function useAssistantStore() {
   const value = useContext(AssistantStore);
-  if (!value) throw new Error('useAssistantStore harus dipakai di dalam AssistantStoreProvider');
+  if (!value) {
+    throw new Error('useAssistantStore harus dipakai di dalam AssistantStoreProvider');
+  }
   return value;
 }

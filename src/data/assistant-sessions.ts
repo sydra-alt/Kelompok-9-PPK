@@ -1,60 +1,40 @@
-export type SessionStatus = 'upcoming' | 'open' | 'closed';
+import type { AttendanceRecord, PracticeSession } from '@/types';
+import { schedules } from '@/data/schedules';
 
-export type AssistantSession = {
-  id: string;
-  practicalName: string;
-  className: string;
-  date: string;
-  startTime: string;
-  endTime: string;
-  room: string;
-  status: SessionStatus;
-};
+/**
+ * Asisten menyimpan salinan state jadwal terpisah dari alur praktikan.
+ * ID dan bentuk sesi tetap memakai kontrak data bersama.
+ */
+export const initialAssistantSessions: PracticeSession[] = schedules.map((session) => ({ ...session }));
 
-export type AssistantAttendance = {
-  id: string;
-  sessionId: string;
-  studentName: string;
-  studentId: string;
-  time: string;
-};
-
-export const initialSessions: AssistantSession[] = [
+/** Rekap dummy untuk layar asisten; tidak disinkronkan dengan presensi praktikan. */
+export const initialAssistantAttendance: AttendanceRecord[] = [
   {
-    id: 'session-1',
-    practicalName: 'Pemrograman Mobile',
-    className: 'TI-4A',
-    date: 'Rabu, 21 Oktober 2026',
-    startTime: '09.00',
-    endTime: '11.00',
-    room: 'Lab Komputer 2',
-    status: 'open',
+    id: 'assistant-att-001',
+    sessionId: 'ses-002',
+    studentId: 's-001',
+    studentName: 'Ahmad Fauzan',
+    attendanceTime: '2026-10-21T08:02:00',
   },
   {
-    id: 'session-2',
-    practicalName: 'Basis Data',
-    className: 'TI-4B',
-    date: 'Rabu, 21 Oktober 2026',
-    startTime: '13.00',
-    endTime: '15.00',
-    room: 'Lab Komputer 1',
-    status: 'upcoming',
+    id: 'assistant-att-002',
+    sessionId: 'ses-002',
+    studentId: 's-002',
+    studentName: 'Siti Rahmawati',
+    attendanceTime: '2026-10-21T08:05:00',
   },
   {
-    id: 'session-3',
-    practicalName: 'Rekayasa Perangkat Lunak',
-    className: 'TI-4A',
-    date: 'Jumat, 23 Oktober 2026',
-    startTime: '10.00',
-    endTime: '12.00',
-    room: 'Lab Komputer 3',
-    status: 'closed',
+    id: 'assistant-att-003',
+    sessionId: 'ses-006',
+    studentId: 's-003',
+    studentName: 'Budi Santoso',
+    attendanceTime: '2026-10-21T10:01:00',
   },
-];
-
-export const initialAttendance: AssistantAttendance[] = [
-  { id: 'att-1', sessionId: 'session-1', studentId: 'mhs-01', studentName: 'Alya Putri', time: '09.02' },
-  { id: 'att-2', sessionId: 'session-1', studentId: 'mhs-02', studentName: 'Bima Pratama', time: '09.04' },
-  { id: 'att-3', sessionId: 'session-1', studentId: 'mhs-03', studentName: 'Citra Lestari', time: '09.07' },
-  { id: 'att-4', sessionId: 'session-3', studentId: 'mhs-04', studentName: 'Daffa Ramadhan', time: '10.01' },
+  {
+    id: 'assistant-att-004',
+    sessionId: 'ses-001',
+    studentId: 's-001',
+    studentName: 'Ahmad Fauzan',
+    attendanceTime: '2026-10-14T08:03:00',
+  },
 ];
