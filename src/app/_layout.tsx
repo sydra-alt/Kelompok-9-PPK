@@ -3,6 +3,7 @@ import * as SplashScreen from 'expo-splash-screen';
 
 import { AnimatedSplashOverlay } from '@/components/animated-icon';
 import { AppColors } from '@/constants/app-theme';
+import { AssistantStoreProvider } from '@/data/assistant-store';
 import AppNavigator from '@/navigation/AppNavigator';
 
 SplashScreen.preventAutoHideAsync();
@@ -22,8 +23,10 @@ const AppTheme = {
 export default function RootLayout() {
   return (
     <ThemeProvider value={AppTheme}>
-      <AnimatedSplashOverlay />
-      <AppNavigator />
+      <AssistantStoreProvider>
+        <AnimatedSplashOverlay />
+        <AppNavigator />
+      </AssistantStoreProvider>
     </ThemeProvider>
   );
 }

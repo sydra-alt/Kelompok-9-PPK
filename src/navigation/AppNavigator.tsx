@@ -27,6 +27,10 @@ export const navigateTo = {
     router.push({ pathname: '/student/history', params: { studentId } }),
   assistantHome: (assistantId: string) =>
     router.push({ pathname: '/assistant', params: { assistantId } }),
+  assistantSession: (assistantId: string, sessionId: string) =>
+    router.push({ pathname: '/assistant/session/[sessionId]', params: { assistantId, sessionId } }),
+  assistantRecap: (assistantId: string, sessionId?: string) =>
+    router.push({ pathname: '/assistant/recap', params: { assistantId, sessionId } }),
 };
 
 export default function AppNavigator() {
@@ -47,8 +51,10 @@ export default function AppNavigator() {
       <Stack.Screen name="student/session/[sessionId]" options={{ title: 'Detail Sesi' }} />
       <Stack.Screen name="student/history" options={{ title: 'Riwayat Kehadiran' }} />
 
-      {/* Alur asisten — Programmer 2 (tambahkan rute asisten di bawah ini) */}
+      {/* Alur asisten — Programmer 2 */}
       <Stack.Screen name="assistant/index" options={{ title: 'Dashboard Asisten' }} />
+      <Stack.Screen name="assistant/session/[sessionId]" options={{ title: 'Kelola Sesi' }} />
+      <Stack.Screen name="assistant/recap" options={{ title: 'Rekap Kehadiran' }} />
     </Stack>
   );
 }
