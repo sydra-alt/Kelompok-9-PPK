@@ -1,7 +1,7 @@
 {
   "expo": {
-    "name": "ppk-rn-expo-58",
-    "slug": "ppk-rn-expo-58",
+    "name": "Sprint 1",
+    "slug": "sprint-1",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
@@ -46,7 +46,7 @@
         }
       },
       "eas": {
-        "projectId": "e959d95e-70ed-4315-9011-886ab99155d7"
+        "projectId": "ec378322-6bdc-46fb-8be3-ced942f93173"
       }
     }
   }
