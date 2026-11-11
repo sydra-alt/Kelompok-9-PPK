@@ -1,17 +1,23 @@
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { Modal, Pressable, StyleSheet, Switch, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { AppButton } from '@/components/AppButton';
 import { AppColors, Radius } from '@/constants/app-theme';
 import { Spacing } from '@/constants/theme';
-import type { DummyUser, PracticeSession } from '@/types';
+import type { PracticeSession } from '@/types';
 import { formatDate, formatTimeRange } from '@/utils/format';
+
+interface StudentIdentity {
+  name: string;
+  identifier: string;
+}
 
 interface AttendanceConfirmSheetProps {
   visible: boolean;
   session: PracticeSession;
-  student: DummyUser;
+  student: StudentIdentity;
+  submitting?: boolean;
   onCancel: () => void;
   onConfirm: () => void;
 }
@@ -24,6 +30,7 @@ export function AttendanceConfirmSheet({
   visible,
   session,
   student,
+  submitting = false,
   onCancel,
   onConfirm,
 }: AttendanceConfirmSheetProps) {
@@ -31,15 +38,13 @@ export function AttendanceConfirmSheet({
   const [agreed, setAgreed] = useState(false);
   const [showValidation, setShowValidation] = useState(false);
 
-  // Reset form setiap kali sheet dibuka.
-  useEffect(() => {
-    if (visible) {
-      setAgreed(false);
-      setShowValidation(false);
-    }
-  }, [visible]);
+  const resetForm = () => {
+    setAgreed(false);
+    setShowValidation(false);
+  };
 
   const handleConfirm = () => {
+    if (submitting) return;
     if (!agreed) {
       setShowValidation(true);
       return;
@@ -48,9 +53,18 @@ export function AttendanceConfirmSheet({
   };
 
   return (
-    <Modal visible={visible} transparent animationType="slide" onRequestClose={onCancel}>
+    <Modal
+      visible={visible}
+      transparent
+      animationType="slide"
+      onShow={resetForm}
+      onRequestClose={onCancel}>
       <View style={styles.root}>
-        <Pressable style={styles.backdrop} onPress={onCancel} accessibilityLabel="Tutup konfirmasi" />
+        <Pressable
+          style={styles.backdrop}
+          onPress={submitting ? undefined : onCancel}
+          accessibilityLabel="Tutup konfirmasi"
+        />
         <View style={[styles.sheet, { paddingBottom: insets.bottom + Spacing.four }]}>
           <View style={styles.handle} />
           <Text style={styles.title}>Konfirmasi Presensi</Text>
@@ -66,6 +80,7 @@ export function AttendanceConfirmSheet({
 
           <Pressable
             testID="attendance-agree-toggle"
+            disabled={submitting}
             style={[styles.agreeRow, showValidation && !agreed && styles.agreeRowError]}
             onPress={() => {
               setAgreed((prev) => !prev);
@@ -76,6 +91,7 @@ export function AttendanceConfirmSheet({
             </Text>
             <Switch
               value={agreed}
+              disabled={submitting}
               onValueChange={(value) => {
                 setAgreed(value);
                 setShowValidation(false);
@@ -89,10 +105,17 @@ export function AttendanceConfirmSheet({
           ) : null}
 
           <View style={styles.actions}>
-            <AppButton title="Batal" variant="ghost" onPress={onCancel} style={styles.actionButton} />
+            <AppButton
+              title="Batal"
+              variant="ghost"
+              disabled={submitting}
+              onPress={onCancel}
+              style={styles.actionButton}
+            />
             <AppButton
               testID="attendance-confirm-button"
-              title="Ya, Presensi"
+              title={submitting ? 'Mengirim...' : 'Ya, Presensi'}
+              disabled={submitting}
               onPress={handleConfirm}
               style={styles.actionButton}
             />

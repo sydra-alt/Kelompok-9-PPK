@@ -30,8 +30,13 @@ yarn-error.*
 .DS_Store
 *.pem
 
-# local env files
+# local env files & Firebase credentials (jangan di-commit ke repository)
+.env
 .env*.local
+!.env.example
+google-services.json
+GoogleService-Info.plist
+*.apk
 
 # typescript
 *.tsbuildinfo

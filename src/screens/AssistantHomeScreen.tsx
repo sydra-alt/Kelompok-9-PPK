@@ -18,7 +18,7 @@ type Filter = 'all' | SessionStatus;
 const FILTERS: { value: Filter; label: string }[] = [
   { value: 'all', label: 'Semua' },
   { value: 'open', label: 'Dibuka' },
-  { value: 'upcoming', label: 'Akan Datang' },
+  { value: 'scheduled', label: 'Akan Datang' },
   { value: 'closed', label: 'Selesai' },
 ];
 

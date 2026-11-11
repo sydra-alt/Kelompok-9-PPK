@@ -7,7 +7,7 @@ export const SESSION_STATUS_META: Record<
   SessionStatus,
   { label: string; color: string; background: string }
 > = {
-  upcoming: { label: 'Belum Dibuka', color: AppColors.warning, background: AppColors.warningSoft },
+  scheduled: { label: 'Belum Dibuka', color: AppColors.warning, background: AppColors.warningSoft },
   open: { label: 'Dibuka', color: AppColors.success, background: AppColors.successSoft },
   closed: { label: 'Ditutup', color: AppColors.neutral, background: AppColors.neutralSoft },
 };

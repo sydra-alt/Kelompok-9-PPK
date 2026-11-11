@@ -1,4 +1,4 @@
-import type { DummyUser, UserRole } from '@/types';
+import type { DummyRole, DummyUser } from '@/types';
 
 /**
  * Identitas dummy untuk simulasi. ID bersifat stabil — jangan diubah
@@ -15,11 +15,11 @@ export const users: DummyUser[] = [
   { id: 'a-002', name: 'Nadia Putri', role: 'assistant', identifier: 'AST-02', className: 'TI-3B' },
 ];
 
-export function getUsersByRole(role: UserRole): DummyUser[] {
+export function getUsersByRole(role: DummyRole): DummyUser[] {
   return users.filter((user) => user.role === role);
 }
 
 export function getUserById(id: string | undefined): DummyUser | undefined {
-  if (!id) return undefined;
-  return users.find((user) => user.id === id);
+  if (!id) return users.find((user) => user.role === 'assistant');
+  return users.find((user) => user.id === id) ?? users.find((user) => user.role === 'assistant');
 }

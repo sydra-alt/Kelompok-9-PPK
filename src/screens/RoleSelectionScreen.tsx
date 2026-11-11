@@ -8,10 +8,10 @@ import { AppColors, CardShadow, HeroGradient, Radius } from '@/constants/app-the
 import { Spacing } from '@/constants/theme';
 import { getUsersByRole } from '@/data/users';
 import { navigateTo } from '@/navigation/AppNavigator';
-import type { UserRole } from '@/types';
+import type { DummyRole } from '@/types';
 import { getInitials } from '@/utils/format';
 
-const ROLE_OPTIONS: { role: UserRole; icon: string; title: string; description: string }[] = [
+const ROLE_OPTIONS: { role: DummyRole; icon: string; title: string; description: string }[] = [
   {
     role: 'student',
     icon: '🎓',
@@ -28,13 +28,13 @@ const ROLE_OPTIONS: { role: UserRole; icon: string; title: string; description: 
 
 /** FR-01 — Pemilihan peran dan identitas dummy. */
 export default function RoleSelectionScreen() {
-  const [role, setRole] = useState<UserRole | null>(null);
+  const [role, setRole] = useState<DummyRole | null>(null);
   const [selectedUserId, setSelectedUserId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   const identities = role ? getUsersByRole(role) : [];
 
-  const handleRoleChange = (nextRole: UserRole) => {
+  const handleRoleChange = (nextRole: DummyRole) => {
     setRole(nextRole);
     setSelectedUserId(null);
     setError(null);

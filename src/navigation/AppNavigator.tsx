@@ -1,30 +1,28 @@
 import { router, Stack } from 'expo-router';
 
 import { AppColors } from '@/constants/app-theme';
+import { useAuth } from '@/context/AuthContext';
 
 /**
  * Fondasi navigasi aplikasi (PIC: Programmer 1, koordinasi dengan Programmer 2).
  *
- * Proyek memakai Expo Router (file-based routing): setiap file di `src/app/`
- * adalah satu rute, sedangkan isi layarnya berada di `src/screens/`.
- * File ini mendefinisikan Stack navigator utama + helper navigasi agar
- * path rute tidak ditulis berulang di banyak layar.
- *
- * Peta rute:
- *   /                              -> RoleSelectionScreen
- *   /student?studentId=            -> StudentHomeScreen
- *   /student/session/[sessionId]   -> StudentSessionDetailScreen
- *   /student/history?studentId=    -> StudentAttendanceHistoryScreen
- *   /assistant?assistantId=        -> AssistantHomeScreen (Programmer 2)
+ * Sprint 2: rute dilindungi dengan `Stack.Protected` berdasarkan status
+ * autentikasi Firebase & peran tepercaya dari `users/{uid}`:
+ * - Belum login / memulihkan sesi -> `/` (LoginScreen) & `/register`
+ * - Peran `praktikan`             -> `/student/*`
+ * - Peran `asisten`               -> `/assistant/*`
  */
 
 export const navigateTo = {
   roleSelection: () => router.dismissTo('/'),
-  studentHome: (studentId: string) => router.push({ pathname: '/student', params: { studentId } }),
+  register: () => router.push('/register'),
+  studentHome: (studentId?: string) =>
+    router.push({ pathname: '/student', params: studentId ? { studentId } : undefined }),
   studentSessionDetail: (studentId: string, sessionId: string) =>
     router.push({ pathname: '/student/session/[sessionId]', params: { sessionId, studentId } }),
-  studentHistory: (studentId: string) =>
-    router.push({ pathname: '/student/history', params: { studentId } }),
+  studentHistory: (studentId?: string) =>
+    router.push({ pathname: '/student/history', params: studentId ? { studentId } : undefined }),
+  studentPermissions: () => router.push('/student/permissions'),
   assistantHome: (assistantId: string) =>
     router.push({ pathname: '/assistant', params: { assistantId } }),
   assistantSession: (assistantId: string, sessionId: string) =>
@@ -34,6 +32,11 @@ export const navigateTo = {
 };
 
 export default function AppNavigator() {
+  const { status, profile } = useAuth();
+  const isAuthenticated = status === 'authenticated' && Boolean(profile);
+  const isStudent = isAuthenticated && profile?.role === 'praktikan';
+  const isAssistant = isAuthenticated && profile?.role === 'asisten';
+
   return (
     <Stack
       screenOptions={{
@@ -44,17 +47,32 @@ export default function AppNavigator() {
         contentStyle: { backgroundColor: AppColors.background },
         headerBackTitle: 'Kembali',
       }}>
-      <Stack.Screen name="index" options={{ headerShown: false }} />
+      {/* Rute autentikasi — hanya aktif sebelum profil terautentikasi penuh */}
+      <Stack.Protected guard={!isAuthenticated}>
+        <Stack.Screen name="index" options={{ headerShown: false }} />
+        <Stack.Screen name="register" options={{ title: 'Registrasi Praktikan' }} />
+      </Stack.Protected>
 
       {/* Alur praktikan — Programmer 1 */}
-      <Stack.Screen name="student/index" options={{ title: 'Beranda Praktikan' }} />
-      <Stack.Screen name="student/session/[sessionId]" options={{ title: 'Detail Sesi' }} />
-      <Stack.Screen name="student/history" options={{ title: 'Riwayat Kehadiran' }} />
+      <Stack.Protected guard={isStudent}>
+        <Stack.Screen
+          name="student/index"
+          options={{ title: 'Beranda Praktikan', headerBackVisible: false }}
+        />
+        <Stack.Screen name="student/session/[sessionId]" options={{ title: 'Detail Sesi' }} />
+        <Stack.Screen name="student/history" options={{ title: 'Riwayat Kehadiran' }} />
+        <Stack.Screen name="student/permissions" options={{ title: 'Pengajuan Izin' }} />
+      </Stack.Protected>
 
       {/* Alur asisten — Programmer 2 */}
-      <Stack.Screen name="assistant/index" options={{ title: 'Dashboard Asisten' }} />
-      <Stack.Screen name="assistant/session/[sessionId]" options={{ title: 'Kelola Sesi' }} />
-      <Stack.Screen name="assistant/recap" options={{ title: 'Rekap Kehadiran' }} />
+      <Stack.Protected guard={isAssistant}>
+        <Stack.Screen
+          name="assistant/index"
+          options={{ title: 'Dashboard Asisten', headerBackVisible: false }}
+        />
+        <Stack.Screen name="assistant/session/[sessionId]" options={{ title: 'Kelola Sesi' }} />
+        <Stack.Screen name="assistant/recap" options={{ title: 'Rekap Kehadiran' }} />
+      </Stack.Protected>
     </Stack>
   );
 }
