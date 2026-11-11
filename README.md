@@ -3,6 +3,7 @@ Untuk setup React Native pertama kalinya, ikuti panduan [PPK 101](PPK%20101.md).
 ## Dokumentasi
 - [PPK 101](PPK%20101.md)
 - [Mobile Environment Configuration](docs/Mobile%20Environment%20Configuration.md)
+- [Konfigurasi Environment & Skema Firestore (Sprint 2)](docs/Firestore%20Schema.md)
 
 ## Pembagian SRS/Fitur — Sprint 1
 

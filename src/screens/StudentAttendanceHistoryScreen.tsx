@@ -1,66 +1,137 @@
-import { router, useLocalSearchParams } from 'expo-router';
+import { router } from 'expo-router';
 import { useMemo } from 'react';
-import { FlatList, StyleSheet, Text, View } from 'react-native';
+import { FlatList, Pressable, StyleSheet, Text, View } from 'react-native';
 
+import { ConnectionBanner } from '@/components/ConnectionBanner';
 import { EmptyState } from '@/components/EmptyState';
+import { LoadingState } from '@/components/LoadingState';
 import { AppColors, CardShadow, Radius } from '@/constants/app-theme';
 import { Spacing } from '@/constants/theme';
-import { getSessionsByClass } from '@/data/schedules';
-import { getUserById } from '@/data/users';
-import { useStudentAttendance } from '@/hooks/use-student-attendance';
+import { useAuth } from '@/context/AuthContext';
+import { useStudentData } from '@/context/StudentDataContext';
 import { navigateTo } from '@/navigation/AppNavigator';
-import type { AttendanceRecord, PracticeSession } from '@/types';
+import type { AttendanceRecord, PermissionRequest, PracticeSession } from '@/types';
 import { formatClock, formatDate } from '@/utils/format';
 
-type HistoryStatus = 'present' | 'absent' | 'pending';
+type HistoryStatus = 'present' | 'excused' | 'absent' | 'pending';
 
 interface HistoryEntry {
   session: PracticeSession;
   record?: AttendanceRecord;
+  permission?: PermissionRequest;
   status: HistoryStatus;
 }
 
-const HISTORY_META: Record<HistoryStatus, { label: string; color: string; background: string; icon: string }> = {
-  present: { label: 'Hadir', color: AppColors.success, background: AppColors.successSoft, icon: '✓' },
-  absent: { label: 'Tidak Hadir', color: AppColors.danger, background: AppColors.dangerSoft, icon: '✕' },
-  pending: { label: 'Belum Presensi', color: AppColors.warning, background: AppColors.warningSoft, icon: '…' },
+const HISTORY_META: Record<
+  HistoryStatus,
+  { label: string; color: string; background: string; icon: string }
+> = {
+  present: {
+    label: 'Hadir',
+    color: AppColors.success,
+    background: AppColors.successSoft,
+    icon: '✓',
+  },
+  excused: {
+    label: 'Izin Disetujui',
+    color: AppColors.primaryDark,
+    background: AppColors.primarySoft,
+    icon: '📝',
+  },
+  absent: {
+    label: 'Tidak Hadir',
+    color: AppColors.danger,
+    background: AppColors.dangerSoft,
+    icon: '✕',
+  },
+  pending: {
+    label: 'Belum Presensi',
+    color: AppColors.warning,
+    background: AppColors.warningSoft,
+    icon: '…',
+  },
 };
 
-/** FR-07 — Riwayat kehadiran praktikan. */
+/** FR-07 (Sprint 2) — Riwayat kehadiran praktikan secara real-time dari Firestore. */
 export default function StudentAttendanceHistoryScreen() {
-  const { studentId } = useLocalSearchParams<{ studentId: string }>();
-  const student = getUserById(studentId);
-  const records = useStudentAttendance(studentId);
+  const { profile } = useAuth();
+  const {
+    sessions,
+    attendance,
+    permissionRequests,
+    classNamesLabel,
+    loading,
+    error,
+    fromCache,
+    isOffline,
+    retry,
+  } = useStudentData();
 
   const entries = useMemo<HistoryEntry[]>(() => {
-    if (!student || student.role !== 'student') return [];
-    const recordBySession = new Map(records.map((r) => [r.sessionId, r]));
-    return getSessionsByClass(student.className)
-      .filter((session) => session.status !== 'upcoming' || recordBySession.has(session.id))
+    if (!profile || profile.role !== 'praktikan') return [];
+    const recordBySession = new Map(attendance.map((r) => [r.sessionId, r]));
+    const permissionBySession = new Map(permissionRequests.map((p) => [p.sessionId, p]));
+
+    return sessions
+      .filter(
+        (session) =>
+          session.status !== 'scheduled' ||
+          recordBySession.has(session.id) ||
+          permissionBySession.has(session.id),
+      )
       .map((session) => {
         const record = recordBySession.get(session.id);
-        const status: HistoryStatus = record ? 'present' : session.status === 'closed' ? 'absent' : 'pending';
-        return { session, record, status };
+        const permission = permissionBySession.get(session.id);
+        const status: HistoryStatus = record
+          ? 'present'
+          : permission?.status === 'approved'
+            ? 'excused'
+            : session.status === 'closed'
+              ? 'absent'
+              : 'pending';
+        return { session, record, permission, status };
       })
       .reverse(); // terbaru di atas
-  }, [records, student]);
+  }, [profile, sessions, attendance, permissionRequests]);
 
-  if (!student || student.role !== 'student') {
+  if (!profile || profile.role !== 'praktikan') {
     return (
       <EmptyState
         icon="🔍"
-        title="Identitas tidak ditemukan"
-        message="Silakan kembali dan pilih identitas praktikan yang valid."
-        actionLabel="Pilih Identitas"
+        title="Akses Praktikan Diperlukan"
+        message="Silakan masuk menggunakan akun praktikan untuk melihat riwayat kehadiran."
+        actionLabel="Kembali ke Login"
         onAction={navigateTo.roleSelection}
       />
     );
   }
 
+  if (loading && sessions.length === 0 && attendance.length === 0) {
+    return (
+      <LoadingState
+        title="Memuat riwayat kehadiran..."
+        message="Mengambil catatan presensi praktikan dari Firestore."
+      />
+    );
+  }
+
+  if (error && sessions.length === 0 && attendance.length === 0) {
+    return (
+      <EmptyState
+        icon="⚠️"
+        title="Gagal memuat riwayat"
+        message={error}
+        actionLabel="Coba Lagi"
+        onAction={retry}
+      />
+    );
+  }
+
   const presentCount = entries.filter((e) => e.status === 'present').length;
+  const excusedCount = entries.filter((e) => e.status === 'excused').length;
   const absentCount = entries.filter((e) => e.status === 'absent').length;
-  const counted = presentCount + absentCount;
-  const rate = counted > 0 ? Math.round((presentCount / counted) * 100) : 0;
+  const counted = presentCount + excusedCount + absentCount;
+  const rate = counted > 0 ? Math.round(((presentCount + excusedCount) / counted) * 100) : 0;
 
   return (
     <FlatList
@@ -69,24 +140,47 @@ export default function StudentAttendanceHistoryScreen() {
       contentContainerStyle={styles.listContent}
       ItemSeparatorComponent={() => <View style={styles.separator} />}
       ListHeaderComponent={
-        entries.length > 0 ? (
-          <View style={styles.summaryCard}>
-            <Text style={styles.summaryTitle}>Ringkasan Kehadiran</Text>
-            <Text style={styles.summarySubtitle}>
-              {student.name} • {student.className}
-            </Text>
-            <View style={styles.summaryRow}>
-              <SummaryItem value={String(presentCount)} label="Hadir" color={AppColors.success} />
-              <SummaryItem value={String(absentCount)} label="Tidak Hadir" color={AppColors.danger} />
-              <SummaryItem value={`${rate}%`} label="Kehadiran" color={AppColors.primary} />
+        <View style={styles.headerBlock}>
+          <ConnectionBanner
+            isOffline={isOffline}
+            fromCache={fromCache}
+            error={error}
+            onRetry={retry}
+          />
+
+          {entries.length > 0 ? (
+            <View style={styles.summaryCard}>
+              <Text style={styles.summaryTitle}>Ringkasan Kehadiran</Text>
+              <Text style={styles.summarySubtitle}>
+                {profile.name} ({profile.identifier}) • {classNamesLabel}
+              </Text>
+              <View style={styles.summaryRow}>
+                <SummaryItem value={String(presentCount)} label="Hadir" color={AppColors.success} />
+                <SummaryItem
+                  value={String(excusedCount)}
+                  label="Izin"
+                  color={AppColors.primaryDark}
+                />
+                <SummaryItem
+                  value={String(absentCount)}
+                  label="Tidak Hadir"
+                  color={AppColors.danger}
+                />
+                <SummaryItem value={`${rate}%`} label="Kehadiran" color={AppColors.primary} />
+              </View>
+              <View style={styles.progressTrack}>
+                <View style={[styles.progressFill, { width: `${rate}%` }]} />
+              </View>
             </View>
-            <View style={styles.progressTrack}>
-              <View style={[styles.progressFill, { width: `${rate}%` }]} />
-            </View>
-          </View>
-        ) : undefined
+          ) : null}
+        </View>
       }
-      renderItem={({ item }) => <HistoryItem entry={item} />}
+      renderItem={({ item }) => (
+        <HistoryItem
+          entry={item}
+          onPress={() => navigateTo.studentSessionDetail(profile.uid, item.session.id)}
+        />
+      )}
       ListEmptyComponent={
         <EmptyState
           icon="🗓️"
@@ -109,10 +203,23 @@ function SummaryItem({ value, label, color }: { value: string; label: string; co
   );
 }
 
-function HistoryItem({ entry }: { entry: HistoryEntry }) {
+function HistoryItem({ entry, onPress }: { entry: HistoryEntry; onPress: () => void }) {
   const meta = HISTORY_META[entry.status];
+  const detailText = entry.record
+    ? `Presensi pukul ${formatClock(entry.record.attendanceTime)} WIB`
+    : entry.status === 'excused'
+      ? 'Izin ketidakhadiran disetujui asisten'
+      : entry.permission?.status === 'pending'
+        ? 'Pengajuan izin sedang menunggu keputusan asisten'
+        : entry.status === 'pending'
+          ? 'Sesi masih dibuka — segera lakukan presensi'
+          : 'Tidak ada catatan presensi';
+
   return (
-    <View testID={`history-item-${entry.session.id}`} style={styles.item}>
+    <Pressable
+      testID={`history-item-${entry.session.id}`}
+      onPress={onPress}
+      style={({ pressed }) => [styles.item, pressed && styles.pressed]}>
       <View style={[styles.itemIcon, { backgroundColor: meta.background }]}>
         <Text style={[styles.itemIconText, { color: meta.color }]}>{meta.icon}</Text>
       </View>
@@ -121,18 +228,12 @@ function HistoryItem({ entry }: { entry: HistoryEntry }) {
         <Text style={styles.itemMeta}>
           {entry.session.className} • {formatDate(entry.session.date)}
         </Text>
-        <Text style={styles.itemTime}>
-          {entry.record
-            ? `Presensi pukul ${formatClock(entry.record.attendanceTime)} WIB`
-            : entry.status === 'pending'
-              ? 'Sesi masih dibuka — segera lakukan presensi'
-              : 'Tidak ada catatan presensi'}
-        </Text>
+        <Text style={styles.itemTime}>{detailText}</Text>
       </View>
       <View style={[styles.itemBadge, { backgroundColor: meta.background }]}>
         <Text style={[styles.itemBadgeText, { color: meta.color }]}>{meta.label}</Text>
       </View>
-    </View>
+    </Pressable>
   );
 }
 
@@ -144,6 +245,10 @@ const styles = StyleSheet.create({
     padding: Spacing.three,
     paddingBottom: Spacing.six,
   },
+  headerBlock: {
+    gap: Spacing.three,
+    marginBottom: Spacing.three,
+  },
   separator: {
     height: Spacing.two + 4,
   },
@@ -154,7 +259,6 @@ const styles = StyleSheet.create({
     borderColor: AppColors.border,
     padding: Spacing.four,
     gap: Spacing.two + 2,
-    marginBottom: Spacing.three,
     ...CardShadow,
   },
   summaryTitle: {
@@ -180,11 +284,11 @@ const styles = StyleSheet.create({
     backgroundColor: AppColors.background,
   },
   summaryValue: {
-    fontSize: 22,
+    fontSize: 20,
     fontWeight: '800',
   },
   summaryLabel: {
-    fontSize: 12,
+    fontSize: 11,
     color: AppColors.textMuted,
     fontWeight: '600',
   },
@@ -208,6 +312,9 @@ const styles = StyleSheet.create({
     borderRadius: Radius.lg,
     borderWidth: 1,
     borderColor: AppColors.border,
+  },
+  pressed: {
+    opacity: 0.88,
   },
   itemIcon: {
     width: 40,

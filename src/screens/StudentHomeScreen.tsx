@@ -1,16 +1,16 @@
 import { StatusBar } from 'expo-status-bar';
-import { useLocalSearchParams } from 'expo-router';
 import { useMemo, useState } from 'react';
 import { FlatList, Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { AppButton } from '@/components/AppButton';
+import { ConnectionBanner } from '@/components/ConnectionBanner';
 import { EmptyState } from '@/components/EmptyState';
+import { LoadingState } from '@/components/LoadingState';
 import { SessionCard } from '@/components/SessionCard';
-import { AppColors, HeroGradient, Radius } from '@/constants/app-theme';
+import { AppColors, CardShadow, HeroGradient, Radius } from '@/constants/app-theme';
 import { Spacing } from '@/constants/theme';
-import { getSessionsByClass } from '@/data/schedules';
-import { getUserById } from '@/data/users';
-import { useStudentAttendance } from '@/hooks/use-student-attendance';
+import { useAuth } from '@/context/AuthContext';
+import { useStudentData } from '@/context/StudentDataContext';
 import { navigateTo } from '@/navigation/AppNavigator';
 import type { SessionStatus } from '@/types';
 import { getInitials } from '@/utils/format';
@@ -20,37 +20,93 @@ type Filter = 'all' | SessionStatus;
 const FILTERS: { value: Filter; label: string }[] = [
   { value: 'all', label: 'Semua' },
   { value: 'open', label: 'Dibuka' },
-  { value: 'upcoming', label: 'Akan Datang' },
+  { value: 'scheduled', label: 'Terjadwal' },
   { value: 'closed', label: 'Ditutup' },
 ];
 
-/** FR-02 — Beranda praktikan & daftar jadwal. */
+/**
+ * FR-02 (Sprint 2) — Beranda praktikan, kelas yang diikuti, jadwal real-time,
+ * serta navigasi ke riwayat kehadiran & daftar pengajuan izin.
+ */
 export default function StudentHomeScreen() {
-  const { studentId } = useLocalSearchParams<{ studentId: string }>();
-  const student = getUserById(studentId);
-  const records = useStudentAttendance(studentId);
+  const { profile, logout } = useAuth();
+  const {
+    memberships,
+    classes,
+    classParticipants,
+    sessions,
+    attendance,
+    permissionRequests,
+    classNamesLabel,
+    loading,
+    error,
+    fromCache,
+    isOffline,
+    retry,
+  } = useStudentData();
+
   const [filter, setFilter] = useState<Filter>('all');
+  const [selectedClassId, setSelectedClassId] = useState<string>('all');
 
-  const sessions = useMemo(
-    () => (student?.role === 'student' ? getSessionsByClass(student.className) : []),
-    [student],
+  const attendedIds = useMemo(() => new Set(attendance.map((r) => r.sessionId)), [attendance]);
+  const permissionBySession = useMemo(
+    () => new Map(permissionRequests.map((req) => [req.sessionId, req])),
+    [permissionRequests],
   );
-  const filteredSessions = filter === 'all' ? sessions : sessions.filter((s) => s.status === filter);
-  const attendedIds = useMemo(() => new Set(records.map((r) => r.sessionId)), [records]);
 
-  if (!student || student.role !== 'student') {
+  const participantCountByClass = useMemo(() => {
+    const counts = new Map<string, number>();
+    for (const member of classParticipants) {
+      counts.set(member.classId, (counts.get(member.classId) ?? 0) + 1);
+    }
+    return counts;
+  }, [classParticipants]);
+
+  const filteredSessions = useMemo(
+    () =>
+      sessions.filter((session) => {
+        const matchStatus = filter === 'all' || session.status === filter;
+        const matchClass = selectedClassId === 'all' || session.classId === selectedClassId;
+        return matchStatus && matchClass;
+      }),
+    [sessions, filter, selectedClassId],
+  );
+
+  if (!profile || profile.role !== 'praktikan') {
     return (
       <EmptyState
         icon="🔍"
-        title="Identitas tidak ditemukan"
-        message="Silakan kembali dan pilih identitas praktikan yang valid."
-        actionLabel="Pilih Identitas"
+        title="Akses Praktikan Diperlukan"
+        message="Silakan masuk menggunakan akun praktikan untuk melihat jadwal praktikum."
+        actionLabel="Kembali ke Login"
         onAction={navigateTo.roleSelection}
       />
     );
   }
 
+  if (loading && sessions.length === 0 && memberships.length === 0) {
+    return (
+      <LoadingState
+        title="Memuat beranda praktikan..."
+        message="Mengambil data kelas, jadwal sesi, dan presensi dari Firestore."
+      />
+    );
+  }
+
+  if (error && sessions.length === 0 && memberships.length === 0) {
+    return (
+      <EmptyState
+        icon="⚠️"
+        title="Gagal memuat data praktikan"
+        message={error}
+        actionLabel="Coba Lagi"
+        onAction={retry}
+      />
+    );
+  }
+
   const openCount = sessions.filter((s) => s.status === 'open').length;
+  const pendingPermissionCount = permissionRequests.filter((p) => p.status === 'pending').length;
 
   return (
     <>
@@ -62,35 +118,114 @@ export default function StudentHomeScreen() {
         ItemSeparatorComponent={() => <View style={styles.separator} />}
         ListHeaderComponent={
           <View style={styles.header}>
+            <ConnectionBanner
+              isOffline={isOffline}
+              fromCache={fromCache}
+              error={error}
+              onRetry={retry}
+            />
+
             <View style={styles.profileCard}>
               <View style={styles.profileRow}>
                 <View style={styles.avatar}>
-                  <Text style={styles.avatarText}>{getInitials(student.name)}</Text>
+                  <Text style={styles.avatarText}>{getInitials(profile.name)}</Text>
                 </View>
                 <View style={styles.profileInfo}>
-                  <Text style={styles.greeting}>Halo,</Text>
-                  <Text style={styles.name}>{student.name}</Text>
+                  <Text style={styles.greeting}>Halo, Praktikan</Text>
+                  <Text style={styles.name}>{profile.name}</Text>
                   <Text style={styles.meta}>
-                    {student.identifier} • Kelas {student.className}
+                    {profile.identifier} • {classNamesLabel}
                   </Text>
                 </View>
+                <Pressable
+                  testID="student-logout-button"
+                  onPress={() => void logout()}
+                  accessibilityRole="button"
+                  style={({ pressed }) => [styles.logoutButton, pressed && styles.pressed]}>
+                  <Text style={styles.logoutText}>Keluar</Text>
+                </Pressable>
               </View>
+
               <View style={styles.statsRow}>
                 <Stat label="Total Sesi" value={sessions.length} />
-                <Stat label="Sedang Dibuka" value={openCount} />
-                <Stat label="Sudah Hadir" value={records.length} />
+                <Stat label="Dibuka" value={openCount} />
+                <Stat label="Hadir" value={attendance.length} />
+                <Stat label="Izin" value={permissionRequests.length} />
               </View>
             </View>
 
-            <AppButton
-              testID="open-history-button"
-              title="📋  Lihat Riwayat Kehadiran"
-              variant="secondary"
-              onPress={() => navigateTo.studentHistory(student.id)}
-            />
+            {memberships.length > 0 ? (
+              <View style={styles.classesCard}>
+                <View style={styles.classesHeader}>
+                  <Text style={styles.classesTitle}>Kelas Praktikum Diikuti</Text>
+                  <Text style={styles.classesCount}>{memberships.length} kelas</Text>
+                </View>
+                <View style={styles.classChipRow}>
+                  {memberships.length > 1 ? (
+                    <Pressable
+                      onPress={() => setSelectedClassId('all')}
+                      style={[
+                        styles.classChip,
+                        selectedClassId === 'all' && styles.classChipActive,
+                      ]}>
+                      <Text
+                        style={[
+                          styles.classChipTitle,
+                          selectedClassId === 'all' && styles.classChipTitleActive,
+                        ]}>
+                        Semua Kelas
+                      </Text>
+                    </Pressable>
+                  ) : null}
+                  {memberships.map((m) => {
+                    const cls = classes.find((c) => c.id === m.classId);
+                    const count = participantCountByClass.get(m.classId) ?? 1;
+                    const active = selectedClassId === m.classId;
+                    return (
+                      <Pressable
+                        key={m.id}
+                        onPress={() =>
+                          setSelectedClassId((prev) => (prev === m.classId ? 'all' : m.classId))
+                        }
+                        style={[styles.classChip, active && styles.classChipActive]}>
+                        <Text style={[styles.classChipTitle, active && styles.classChipTitleActive]}>
+                          {m.className}
+                          {cls?.practicalName ? ` • ${cls.practicalName}` : ''}
+                        </Text>
+                        <Text style={[styles.classChipMeta, active && styles.classChipMetaActive]}>
+                          👥 {count} peserta
+                        </Text>
+                      </Pressable>
+                    );
+                  })}
+                </View>
+              </View>
+            ) : null}
+
+            <View style={styles.actionRow}>
+              <AppButton
+                testID="open-history-button"
+                title="📋 Riwayat Kehadiran"
+                variant="secondary"
+                onPress={() => navigateTo.studentHistory(profile.uid)}
+                style={styles.actionButton}
+              />
+              <AppButton
+                testID="open-permissions-button"
+                title={
+                  pendingPermissionCount > 0
+                    ? `📝 Izin (${pendingPermissionCount} menunggu)`
+                    : '📝 Pengajuan Izin'
+                }
+                variant="secondary"
+                onPress={navigateTo.studentPermissions}
+                style={styles.actionButton}
+              />
+            </View>
 
             <View style={styles.sectionHeader}>
               <Text style={styles.sectionTitle}>Jadwal Praktikum</Text>
+              <Text style={styles.realtimeBadge}>● Sinkron Real-Time</Text>
             </View>
 
             <View style={styles.filterRow}>
@@ -104,7 +239,9 @@ export default function StudentHomeScreen() {
                     accessibilityRole="tab"
                     accessibilityState={{ selected: active }}
                     style={[styles.filterChip, active && styles.filterChipActive]}>
-                    <Text style={[styles.filterText, active && styles.filterTextActive]}>{item.label}</Text>
+                    <Text style={[styles.filterText, active && styles.filterTextActive]}>
+                      {item.label}
+                    </Text>
                   </Pressable>
                 );
               })}
@@ -116,23 +253,37 @@ export default function StudentHomeScreen() {
             testID={`session-card-${item.id}`}
             session={item}
             attended={attendedIds.has(item.id)}
-            onPress={() => navigateTo.studentSessionDetail(student.id, item.id)}
+            permissionStatus={permissionBySession.get(item.id)?.status}
+            onPress={() => navigateTo.studentSessionDetail(profile.uid, item.id)}
           />
         )}
         ListEmptyComponent={
-          sessions.length === 0 ? (
+          memberships.length === 0 ? (
+            <EmptyState
+              icon="🏫"
+              title="Belum terdaftar di kelas"
+              message="Akun praktikanmu belum dimasukkan ke kelas praktikum mana pun. Hubungi asisten untuk ditambahkan ke kelasmu."
+              actionLabel="Muat Ulang"
+              onAction={retry}
+            />
+          ) : sessions.length === 0 ? (
             <EmptyState
               icon="📭"
               title="Belum ada jadwal"
-              message={`Belum ada jadwal praktikum untuk kelas ${student.className}.`}
+              message={`Belum ada jadwal sesi praktikum untuk kelas ${classNamesLabel}.`}
+              actionLabel="Muat Ulang"
+              onAction={retry}
             />
           ) : (
             <EmptyState
               icon="🔎"
               title="Tidak ada sesi"
-              message="Tidak ada sesi dengan status ini. Coba pilih filter lain."
+              message="Tidak ada sesi dengan filter ini. Coba pilih filter lain."
               actionLabel="Tampilkan Semua"
-              onAction={() => setFilter('all')}
+              onAction={() => {
+                setFilter('all');
+                setSelectedClassId('all');
+              }}
             />
           )
         }
@@ -175,8 +326,8 @@ const styles = StyleSheet.create({
     gap: Spacing.three,
   },
   avatar: {
-    width: 56,
-    height: 56,
+    width: 52,
+    height: 52,
     borderRadius: Radius.pill,
     backgroundColor: 'rgba(255,255,255,0.2)',
     alignItems: 'center',
@@ -184,7 +335,7 @@ const styles = StyleSheet.create({
   },
   avatarText: {
     color: AppColors.textOnPrimary,
-    fontSize: 20,
+    fontSize: 19,
     fontWeight: '800',
   },
   profileInfo: {
@@ -192,17 +343,34 @@ const styles = StyleSheet.create({
   },
   greeting: {
     color: 'rgba(255,255,255,0.8)',
-    fontSize: 13,
+    fontSize: 12,
+    fontWeight: '600',
   },
   name: {
     color: AppColors.textOnPrimary,
-    fontSize: 20,
+    fontSize: 19,
     fontWeight: '800',
   },
   meta: {
     color: 'rgba(255,255,255,0.85)',
-    fontSize: 13,
+    fontSize: 12,
     marginTop: 2,
+  },
+  logoutButton: {
+    paddingHorizontal: 12,
+    paddingVertical: 7,
+    borderRadius: Radius.pill,
+    backgroundColor: 'rgba(255,255,255,0.18)',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.3)',
+  },
+  logoutText: {
+    color: AppColors.textOnPrimary,
+    fontSize: 12,
+    fontWeight: '700',
+  },
+  pressed: {
+    opacity: 0.8,
   },
   statsRow: {
     flexDirection: 'row',
@@ -212,12 +380,12 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: 'rgba(255,255,255,0.16)',
     borderRadius: Radius.md,
-    paddingVertical: Spacing.two + 4,
+    paddingVertical: Spacing.two + 2,
     alignItems: 'center',
   },
   statValue: {
     color: AppColors.textOnPrimary,
-    fontSize: 20,
+    fontSize: 19,
     fontWeight: '800',
   },
   statLabel: {
@@ -227,13 +395,85 @@ const styles = StyleSheet.create({
     marginTop: 2,
     textAlign: 'center',
   },
+  classesCard: {
+    backgroundColor: AppColors.surface,
+    borderRadius: Radius.lg,
+    borderWidth: 1,
+    borderColor: AppColors.border,
+    padding: Spacing.three,
+    gap: Spacing.two,
+    ...CardShadow,
+  },
+  classesHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  classesTitle: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: AppColors.text,
+  },
+  classesCount: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: AppColors.textMuted,
+  },
+  classChipRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: Spacing.two,
+  },
+  classChip: {
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: Radius.md,
+    backgroundColor: AppColors.background,
+    borderWidth: 1,
+    borderColor: AppColors.border,
+    gap: 2,
+  },
+  classChipActive: {
+    backgroundColor: AppColors.primarySoft,
+    borderColor: AppColors.primary,
+  },
+  classChipTitle: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: AppColors.text,
+  },
+  classChipTitleActive: {
+    color: AppColors.primaryDark,
+  },
+  classChipMeta: {
+    fontSize: 11,
+    color: AppColors.textMuted,
+  },
+  classChipMetaActive: {
+    color: AppColors.primaryDark,
+  },
+  actionRow: {
+    flexDirection: 'row',
+    gap: Spacing.two,
+  },
+  actionButton: {
+    flex: 1,
+  },
   sectionHeader: {
-    marginTop: Spacing.two,
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginTop: Spacing.one,
   },
   sectionTitle: {
     fontSize: 18,
     fontWeight: '800',
     color: AppColors.text,
+  },
+  realtimeBadge: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: AppColors.success,
   },
   filterRow: {
     flexDirection: 'row',

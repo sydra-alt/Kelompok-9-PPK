@@ -1,10 +1,11 @@
 import type { ReactNode } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 
+import { PERMISSION_STATUS_META } from '@/components/PermissionStatusBadge';
 import { StatusBadge } from '@/components/StatusBadge';
 import { AppColors, CardShadow, Radius } from '@/constants/app-theme';
 import { Spacing } from '@/constants/theme';
-import type { PracticeSession } from '@/types';
+import type { PermissionStatus, PracticeSession } from '@/types';
 import { formatDate, formatTimeRange } from '@/utils/format';
 
 interface SessionCardProps {
@@ -12,13 +13,23 @@ interface SessionCardProps {
   onPress?: () => void;
   /** Tampilkan penanda "Sudah presensi" (alur praktikan). */
   attended?: boolean;
+  /** Status pengajuan izin pada sesi ini bila ada (alur praktikan). */
+  permissionStatus?: PermissionStatus;
   /** Slot tambahan di bagian bawah kartu (mis. aksi asisten). */
   footer?: ReactNode;
   testID?: string;
 }
 
 /** Kartu jadwal sesi praktikum — dipakai di daftar jadwal praktikan maupun asisten. */
-export function SessionCard({ session, onPress, attended, footer, testID }: SessionCardProps) {
+export function SessionCard({
+  session,
+  onPress,
+  attended,
+  permissionStatus,
+  footer,
+  testID,
+}: SessionCardProps) {
+  const permissionMeta = permissionStatus ? PERMISSION_STATUS_META[permissionStatus] : null;
   return (
     <Pressable
       testID={testID}
@@ -52,6 +63,12 @@ export function SessionCard({ session, onPress, attended, footer, testID }: Sess
         {attended ? (
           <View style={styles.attendedPill}>
             <Text style={styles.attendedText}>✓ Sudah presensi</Text>
+          </View>
+        ) : permissionMeta ? (
+          <View style={[styles.attendedPill, { backgroundColor: permissionMeta.background }]}>
+            <Text style={[styles.attendedText, { color: permissionMeta.color }]}>
+              {permissionMeta.icon} Izin: {permissionMeta.label}
+            </Text>
           </View>
         ) : null}
 
