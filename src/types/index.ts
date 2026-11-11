@@ -148,6 +148,7 @@ export interface PermissionRequest {
   /** Format waktu lokal: YYYY-MM-DDTHH:mm:ss */
   createdAt: string | null;
   decidedAt: string | null;
+  decidedBy?: string | null;
   decidedByName: string | null;
   decisionNote: string | null;
 }

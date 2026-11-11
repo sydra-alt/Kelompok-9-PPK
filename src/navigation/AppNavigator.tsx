@@ -15,14 +15,14 @@ import { useAuth } from '@/context/AuthContext';
 
 export const navigateTo = {
   roleSelection: () => router.dismissTo('/'),
-  register: () => router.push('/register'),
+  register: () => router.push('/register' as any),
   studentHome: (studentId?: string) =>
     router.push({ pathname: '/student', params: studentId ? { studentId } : undefined }),
   studentSessionDetail: (studentId: string, sessionId: string) =>
     router.push({ pathname: '/student/session/[sessionId]', params: { sessionId, studentId } }),
   studentHistory: (studentId?: string) =>
     router.push({ pathname: '/student/history', params: studentId ? { studentId } : undefined }),
-  studentPermissions: () => router.push('/student/permissions'),
+  studentPermissions: () => router.push('/student/permissions' as any),
   assistantHome: (assistantId: string) =>
     router.push({ pathname: '/assistant', params: { assistantId } }),
   assistantSession: (assistantId: string, sessionId: string) =>
