@@ -24,6 +24,7 @@ export const COLLECTIONS = {
   users: 'users',
   classes: 'classes',
   classMembers: 'classMembers',
+  schedules: 'sessions',
   sessions: 'sessions',
   attendance: 'attendance',
   permissionRequests: 'permissionRequests',
@@ -165,6 +166,7 @@ export function toPermissionRequest(snap: DocumentSnapshot): PermissionRequest {
     aiClassification: toAiClassification(d.aiClassification),
     createdAt: timestampToLocal(d.createdAt),
     decidedAt: timestampToLocal(d.decidedAt),
+    decidedBy: optStr(d.decidedBy) ?? null,
     decidedByName: optStr(d.decidedByName) ?? null,
     decisionNote: optStr(d.decisionNote) ?? null,
   };

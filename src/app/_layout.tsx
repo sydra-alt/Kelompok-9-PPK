@@ -3,6 +3,7 @@ import * as SplashScreen from 'expo-splash-screen';
 
 import { AnimatedSplashOverlay } from '@/components/animated-icon';
 import { AppColors } from '@/constants/app-theme';
+import { AssistantDataProvider } from '@/context/AssistantDataContext';
 import { AuthProvider } from '@/context/AuthContext';
 import { StudentDataProvider } from '@/context/StudentDataContext';
 import { AssistantStoreProvider } from '@/data/assistant-store';
@@ -27,10 +28,12 @@ export default function RootLayout() {
     <ThemeProvider value={AppTheme}>
       <AuthProvider>
         <StudentDataProvider>
-          <AssistantStoreProvider>
-            <AnimatedSplashOverlay />
-            <AppNavigator />
-          </AssistantStoreProvider>
+          <AssistantDataProvider>
+            <AssistantStoreProvider>
+              <AnimatedSplashOverlay />
+              <AppNavigator />
+            </AssistantStoreProvider>
+          </AssistantDataProvider>
         </StudentDataProvider>
       </AuthProvider>
     </ThemeProvider>
