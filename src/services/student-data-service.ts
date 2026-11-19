@@ -13,6 +13,7 @@ import {
   COLLECTIONS,
   toAttendanceRecord,
   toClassMembership,
+  toLab,
   toPermissionRequest,
   toPracticeClass,
   toPracticeSession,
@@ -20,6 +21,7 @@ import {
 import type {
   AttendanceRecord,
   ClassMembership,
+  Lab,
   PermissionRequest,
   PracticeClass,
   PracticeSession,
@@ -44,6 +46,34 @@ export type OnError = (error: unknown) => void;
 
 /** Batas operator `in` Firestore. */
 const MAX_IN_VALUES = 30;
+
+/** Semua lokasi laboratorium yang dapat dibaca pengguna terautentikasi. */
+export function subscribeLabs(onData: OnData<Lab[]>, onError: OnError): Unsubscribe {
+  return onSnapshot(
+    collection(getDb(), COLLECTIONS.labs),
+    { includeMetadataChanges: true },
+    (snap) =>
+      onData(
+        snap.docs.map(toLab).filter((lab): lab is Lab => lab !== null),
+        { fromCache: snap.metadata.fromCache },
+      ),
+    onError,
+  );
+}
+
+/** Satu laboratorium secara real-time berdasarkan ID dokumen. */
+export function subscribeLab(
+  labId: string,
+  onData: OnData<Lab | null>,
+  onError: OnError,
+): Unsubscribe {
+  return onSnapshot(
+    doc(getDb(), COLLECTIONS.labs, labId),
+    { includeMetadataChanges: true },
+    (snap) => onData(snap.exists() ? toLab(snap) : null, { fromCache: snap.metadata.fromCache }),
+    onError,
+  );
+}
 
 const bySchedule = (a: PracticeSession, b: PracticeSession) =>
   `${a.date}${a.startTime}`.localeCompare(`${b.date}${b.startTime}`);

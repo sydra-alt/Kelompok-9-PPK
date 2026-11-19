@@ -5,6 +5,7 @@ import type {
   AiClassificationStatus,
   AttendanceRecord,
   ClassMembership,
+  Lab,
   PermissionRequest,
   PermissionStatus,
   PracticeClass,
@@ -24,6 +25,7 @@ export const COLLECTIONS = {
   users: 'users',
   classes: 'classes',
   classMembers: 'classMembers',
+  labs: 'labs',
   schedules: 'sessions',
   sessions: 'sessions',
   attendance: 'attendance',
@@ -51,6 +53,40 @@ const ROLES: UserRole[] = ['praktikan', 'asisten'];
 const str = (value: unknown, fallback = ''): string => (typeof value === 'string' ? value : fallback);
 const optStr = (value: unknown): string | undefined =>
   typeof value === 'string' && value.length > 0 ? value : undefined;
+
+const finiteNumber = (value: unknown): number | undefined =>
+  typeof value === 'number' && Number.isFinite(value) ? value : undefined;
+
+/** Mapper defensif `labs/{labId}`. Nilai koordinat/radius tak valid ditolak. */
+export function toLab(snap: DocumentSnapshot): Lab | null {
+  if (!snap.exists()) return null;
+  const d = readData(snap);
+  const latitude = finiteNumber(d.latitude);
+  const longitude = finiteNumber(d.longitude);
+  const radiusMeters = finiteNumber(d.radiusMeters);
+  if (
+    latitude === undefined ||
+    latitude < -90 ||
+    latitude > 90 ||
+    longitude === undefined ||
+    longitude < -180 ||
+    longitude > 180 ||
+    radiusMeters === undefined ||
+    radiusMeters <= 0
+  ) {
+    return null;
+  }
+
+  return {
+    id: snap.id,
+    name: str(d.name, 'Laboratorium'),
+    latitude,
+    longitude,
+    radiusMeters,
+    building: optStr(d.building),
+    description: optStr(d.description),
+  };
+}
 
 /** Timestamp Firestore → "YYYY-MM-DDTHH:mm:ss" waktu lokal (null bila kosong). */
 export function timestampToLocal(value: unknown): string | null {
@@ -112,6 +148,8 @@ export function toPracticeSession(snap: DocumentSnapshot): PracticeSession {
   return {
     id: snap.id,
     classId: str(d.classId),
+    labId: optStr(d.labId),
+    labName: optStr(d.labName),
     practicalName: str(d.practicalName, 'Praktikum'),
     className: str(d.className, '-'),
     date: str(d.date),
@@ -134,6 +172,9 @@ export function toAttendanceRecord(snap: DocumentSnapshot): AttendanceRecord {
     studentName: str(d.studentName),
     studentIdentifier: optStr(d.studentIdentifier),
     attendanceTime: timestampToLocal(d.attendedAt) ?? nowLocalDateTime(),
+    latitude: finiteNumber(d.latitude),
+    longitude: finiteNumber(d.longitude),
+    distanceMeters: finiteNumber(d.distanceMeters),
   };
 }
 

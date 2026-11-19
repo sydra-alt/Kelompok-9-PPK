@@ -78,9 +78,21 @@ Jadwal dan status sesi pertemuan praktikum.
 - `topic`: `string` (opsional)
 - `room`: `string` (opsional)
 - `assistantName`: `string` (opsional)
+- `labId`: `string` (wajib untuk Sprint 3, referensi ke `labs/{labId}`)
+- `labName`: `string` (opsional, denormalisasi untuk tampilan)
 - `updatedAt`: `Timestamp`
 
-### 3.5 `attendance/{sessionId}_{studentId}`
+### 3.5 `labs/{labId}`
+Lokasi laboratorium yang menjadi acuan marker Maps dan validasi radius presensi.
+- `name`: `string` (wajib)
+- `latitude`: `number` (wajib, rentang -90 sampai 90)
+- `longitude`: `number` (wajib, rentang -180 sampai 180)
+- `radiusMeters`: `number` (wajib, lebih besar dari 0)
+- `building`: `string` (opsional)
+- `description`: `string` (opsional)
+- `createdAt`, `updatedAt`: `Timestamp` (opsional)
+
+### 3.6 `attendance/{sessionId}_{studentId}`
 Catatan kehadiran praktikan. ID dokumen deterministik: `attendanceId(sessionId, studentId)` + dibuat melalui transaksi Firestore ([`submitAttendance`](../src/services/attendance-service.ts)) sehingga presensi ganda tidak dapat dibuat.
 - `sessionId`: `string` (wajib)
 - `classId`: `string` (wajib)
@@ -89,8 +101,11 @@ Catatan kehadiran praktikan. ID dokumen deterministik: `attendanceId(sessionId, 
 - `studentIdentifier`: `string` (wajib, NIM)
 - `attendedAt`: `Timestamp` (wajib, `serverTimestamp()`)
 - `createdAt`: `Timestamp`
+- `latitude`: `number` (wajib untuk presensi Sprint 3)
+- `longitude`: `number` (wajib untuk presensi Sprint 3)
+- `distanceMeters`: `number` (wajib untuk presensi Sprint 3)
 
-### 3.6 `permissionRequests/{sessionId}_{studentId}`
+### 3.7 `permissionRequests/{sessionId}_{studentId}`
 Pengajuan izin praktikan untuk sesi tertentu. ID dokumen deterministik: `permissionRequestId(sessionId, studentId)`.
 - `sessionId`: `string` (wajib)
 - `classId`: `string` (wajib)

@@ -3,7 +3,6 @@ import { useEffect, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 
 import { AppButton } from '@/components/AppButton';
-import { AttendanceConfirmSheet } from '@/components/AttendanceConfirmSheet';
 import { ConnectionBanner } from '@/components/ConnectionBanner';
 import { EmptyState } from '@/components/EmptyState';
 import { FeedbackBanner, type FeedbackType } from '@/components/FeedbackBanner';
@@ -16,7 +15,7 @@ import { Spacing } from '@/constants/theme';
 import { useAuth } from '@/context/AuthContext';
 import { useStudentData } from '@/context/StudentDataContext';
 import { navigateTo } from '@/navigation/AppNavigator';
-import { getAttendanceBlockReason, submitAttendance } from '@/services/attendance-service';
+import { getAttendanceBlockReason } from '@/services/attendance-service';
 import { getErrorMessage } from '@/services/errors';
 import { classifyPermissionRequest, submitPermissionRequest } from '@/services/permission-service';
 import { subscribeSession } from '@/services/student-data-service';
@@ -55,9 +54,7 @@ export default function StudentSessionDetailScreen() {
     error: string | null;
   } | null>(null);
 
-  const [attendanceSheetVisible, setAttendanceSheetVisible] = useState(false);
   const [permissionSheetVisible, setPermissionSheetVisible] = useState(false);
-  const [submittingAttendance, setSubmittingAttendance] = useState(false);
   const [submittingPermission, setSubmittingPermission] = useState(false);
   const [retryingAi, setRetryingAi] = useState(false);
   const [feedback, setFeedback] = useState<Feedback | null>(null);
@@ -143,7 +140,7 @@ export default function StudentSessionDetailScreen() {
   const canAttend = !myRecord && !blockReason && myPermission?.status !== 'approved';
   const canRequestPermission = !myRecord && !myPermission && session.status !== 'closed';
 
-  const handleOpenAttendanceSheet = () => {
+  const handleOpenLocationAttendance = () => {
     if (myRecord) {
       setFeedback({
         type: 'error',
@@ -156,30 +153,7 @@ export default function StudentSessionDetailScreen() {
       setFeedback({ type: 'error', title: 'Presensi tidak tersedia', message: blockReason });
       return;
     }
-    setAttendanceSheetVisible(true);
-  };
-
-  const handleConfirmAttendance = async () => {
-    setSubmittingAttendance(true);
-    setFeedback(null);
-    try {
-      await submitAttendance(profile, session.id);
-      setAttendanceSheetVisible(false);
-      setFeedback({
-        type: 'success',
-        title: 'Presensi berhasil!',
-        message: 'Kehadiranmu telah tersimpan di Firestore dan langsung tercatat pada rekap asisten.',
-      });
-    } catch (err) {
-      setAttendanceSheetVisible(false);
-      setFeedback({
-        type: 'error',
-        title: 'Presensi gagal',
-        message: getErrorMessage(err, 'Gagal menyimpan presensi. Periksa koneksi lalu coba lagi.'),
-      });
-    } finally {
-      setSubmittingAttendance(false);
-    }
+    navigateTo.studentAttendance(session.id);
   };
 
   const handleSubmitPermission = async (reason: string) => {
@@ -224,7 +198,7 @@ export default function StudentSessionDetailScreen() {
         ? 'Sesi Belum Dibuka'
         : session.status === 'closed'
           ? 'Sesi Sudah Ditutup'
-          : 'Presensi Sekarang';
+          : 'Lanjut ke Presensi Lokasi';
 
   return (
     <>
@@ -322,8 +296,8 @@ export default function StudentSessionDetailScreen() {
           <AppButton
             testID="attendance-button"
             title={attendanceButtonTitle}
-            disabled={!canAttend || submittingAttendance}
-            onPress={handleOpenAttendanceSheet}
+            disabled={!canAttend}
+            onPress={handleOpenLocationAttendance}
           />
         </View>
 
@@ -418,15 +392,6 @@ export default function StudentSessionDetailScreen() {
           )}
         </View>
       </ScrollView>
-
-      <AttendanceConfirmSheet
-        visible={attendanceSheetVisible}
-        session={session}
-        student={{ name: profile.name, identifier: profile.identifier }}
-        submitting={submittingAttendance}
-        onCancel={() => setAttendanceSheetVisible(false)}
-        onConfirm={() => void handleConfirmAttendance()}
-      />
 
       <PermissionRequestSheet
         visible={permissionSheetVisible}

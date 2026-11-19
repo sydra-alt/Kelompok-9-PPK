@@ -20,6 +20,9 @@ export const navigateTo = {
     router.push({ pathname: '/student', params: studentId ? { studentId } : undefined }),
   studentSessionDetail: (studentId: string, sessionId: string) =>
     router.push({ pathname: '/student/session/[sessionId]', params: { sessionId, studentId } }),
+  studentAttendance: (sessionId: string) =>
+    router.push({ pathname: '/student/attendance/[sessionId]' as any, params: { sessionId } }),
+  studentLabsMap: () => router.push('/student/maps' as any),
   studentHistory: (studentId?: string) =>
     router.push({ pathname: '/student/history', params: studentId ? { studentId } : undefined }),
   studentPermissions: () => router.push('/student/permissions' as any),
@@ -60,6 +63,8 @@ export default function AppNavigator() {
           options={{ title: 'Beranda Praktikan', headerBackVisible: false }}
         />
         <Stack.Screen name="student/session/[sessionId]" options={{ title: 'Detail Sesi' }} />
+        <Stack.Screen name="student/attendance/[sessionId]" options={{ title: 'Presensi Lokasi' }} />
+        <Stack.Screen name="student/maps" options={{ title: 'Peta Laboratorium' }} />
         <Stack.Screen name="student/history" options={{ title: 'Riwayat Kehadiran' }} />
         <Stack.Screen name="student/permissions" options={{ title: 'Pengajuan Izin' }} />
       </Stack.Protected>

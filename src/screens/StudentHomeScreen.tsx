@@ -222,6 +222,12 @@ export default function StudentHomeScreen() {
                 style={styles.actionButton}
               />
             </View>
+            <AppButton
+              testID="open-labs-map-button"
+              title="🗺️ Peta Laboratorium"
+              variant="secondary"
+              onPress={navigateTo.studentLabsMap}
+            />
 
             <View style={styles.sectionHeader}>
               <Text style={styles.sectionTitle}>Jadwal Praktikum</Text>
