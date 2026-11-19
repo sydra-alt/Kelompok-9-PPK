@@ -27,6 +27,13 @@
     "plugins": [
       "expo-router",
       [
+        "expo-location",
+        {
+          "locationWhenInUsePermission": "Izinkan aplikasi menggunakan lokasi saat presensi dan menampilkan posisi Anda di peta."
+        }
+      ],
+      "expo-notifications",
+      [
         "expo-splash-screen",
         {
           "backgroundColor": "#208AEF",

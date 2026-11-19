@@ -69,6 +69,17 @@ export interface ClassMembership {
   studentIdentifier: string;
 }
 
+/** Dokumen `labs/{labId}` yang dipakai peta dan validasi radius presensi. */
+export interface Lab {
+  id: string;
+  name: string;
+  latitude: number;
+  longitude: number;
+  radiusMeters: number;
+  building?: string;
+  description?: string;
+}
+
 // ---------------------------------------------------------------------------
 // Sesi / jadwal
 // ---------------------------------------------------------------------------
@@ -80,6 +91,9 @@ export interface PracticeSession {
   id: string;
   /** Referensi ke `classes/{classId}`. */
   classId?: string;
+  /** Referensi ke `labs/{labId}`; wajib untuk presensi berbasis lokasi. */
+  labId?: string;
+  labName?: string;
   practicalName: string;
   className: string;
   /** Format: YYYY-MM-DD */
@@ -109,6 +123,9 @@ export interface AttendanceRecord {
   studentIdentifier?: string;
   /** Format waktu lokal: YYYY-MM-DDTHH:mm:ss */
   attendanceTime: string;
+  latitude?: number;
+  longitude?: number;
+  distanceMeters?: number;
 }
 
 // ---------------------------------------------------------------------------
