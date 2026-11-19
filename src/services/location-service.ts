@@ -39,3 +39,28 @@ export async function getCurrentDeviceLocation(): Promise<Coordinates> {
     throw new AppError('location-unavailable', 'Lokasi perangkat tidak tersedia. Aktifkan GPS lalu coba lagi.');
   }
 }
+
+/** Mengikuti pembaruan lokasi saat layar Maps berada di foreground. */
+export async function watchDeviceLocation(
+  onUpdate: (coordinates: Coordinates) => void,
+  onError: (message: string) => void,
+): Promise<Location.LocationSubscription> {
+  const permission = await Location.getForegroundPermissionsAsync();
+  if (permission.status !== 'granted') {
+    throw new AppError('location-permission-denied', 'Izin lokasi belum diberikan. Izinkan akses lalu coba lagi.');
+  }
+
+  if (!(await Location.hasServicesEnabledAsync())) {
+    throw new AppError('location-services-disabled', 'Layanan lokasi/GPS mati. Aktifkan lalu coba lagi.');
+  }
+
+  return Location.watchPositionAsync(
+    {
+      accuracy: Location.Accuracy.Balanced,
+      distanceInterval: 10,
+      timeInterval: 5000,
+    },
+    ({ coords }) => onUpdate({ latitude: coords.latitude, longitude: coords.longitude }),
+    onError,
+  );
+}

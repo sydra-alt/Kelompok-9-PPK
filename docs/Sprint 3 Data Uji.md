@@ -1,49 +1,44 @@
 # Data Uji Presensi Lokasi Sprint 3
 
-Dokumen ini menyiapkan contoh data yang bisa dimasukkan melalui Firebase Console.
-Koordinat lab diambil dari titik yang diberikan untuk lokasi uji. Dokumen belum
-dapat dibuat langsung di proyek Firebase karena akses Console dan konfigurasi
-Firebase lokal tidak tersedia di workspace.
+Dokumen ini mencatat data uji yang sudah dibuat teman kelompok di Firebase
+Console, berdasarkan informasi yang dibagikan.
 
 ## 1. Laboratorium
 
-Buat koleksi `labs`, lalu buat dokumen dengan ID tetap `lab-ti-01`:
+Dokumen `labs/lab-ti-01`:
 
 ```json
 {
-  "name": "Laboratorium Informatika",
-  "latitude": -7.048048533232636,
-  "longitude": 110.44080698128832,
-  "radiusMeters": 100,
-  "building": "Gedung Informatika",
-  "description": "Data awal untuk demonstrasi presensi berbasis lokasi"
+  "name": "Lab Praktikum",
+  "latitude": -7.049,
+  "longitude": 110.438004,
+  "radiusMeters": 300,
+  "building": "FSM"
 }
 ```
 
-`radiusMeters: 100` adalah radius awal untuk pengujian. Sesuaikan setelah diuji
-di perangkat dan pastikan titik koordinat benar-benar berada di lab yang dituju.
+Gunakan titik koordinat ini sebagai acuan saat membandingkan posisi perangkat.
 
 ## 2. Sesi praktikum yang tertaut ke lab
 
-Buat dokumen di koleksi `sessions` dengan ID, misalnya `session-location-demo`.
-Isi field berikut, lalu ganti `classId` dan `className` dengan kelas Firestore
-yang benar-benar diikuti akun praktikan uji:
+Dokumen `sessions/6helXuM3s0WFcBDjrypj`:
 
 ```json
 {
-  "classId": "GANTI_DENGAN_ID_DOKUMEN_KELAS_AKTIF",
-  "className": "GANTI_DENGAN_NAMA_KELAS_AKTIF",
-  "practicalName": "Uji Presensi Berbasis Lokasi",
-  "date": "2026-11-20",
-  "startTime": "08:00",
-  "endTime": "10:00",
+  "classId": "kelas-ti-01",
+  "className": "TI-3A",
+  "practicalName": "Praktikum",
+  "date": "2026-11-19",
+  "startTime": "19:00",
+  "endTime": "21:00",
   "status": "scheduled",
   "labId": "lab-ti-01",
-  "labName": "Laboratorium Informatika",
-  "room": "Laboratorium Informatika"
+  "labName": "Lab Praktikum"
 }
 ```
 
-Mulai dengan status `scheduled`. Ubah menjadi `open` dari akun asisten saat
-siap menguji presensi. Pastikan Firestore Rules telah mengizinkan praktikan
-membaca `labs` serta membuat attendance dengan field koordinat dan jarak.
+Kelas `classes/kelas-ti-01` bernama `TI-3A`; anggota uji adalah
+`rwHLRxuPmWX0BYCviD1lzRCvIh03`. Sesi masih `scheduled`; ubah ke `open` dari akun
+asisten saat siap menguji presensi. Pastikan Firestore Rules mengizinkan
+praktikan membaca `labs` serta membuat attendance dengan field koordinat dan
+jarak.
