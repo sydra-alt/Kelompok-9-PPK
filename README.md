@@ -70,6 +70,47 @@ Sprint 2 mengganti dummy data dengan Firebase Authentication dan Cloud Firestore
 4. Demonstrasikan alur izin: praktikan mengirim alasan, klasifikasi AI tampil atau kegagalannya ditangani, asisten memberi keputusan, dan status keputusan terlihat oleh praktikan.
 5. Pastikan data tetap tersedia setelah aplikasi dimulai ulang, akses lintas peran ditolak oleh Security Rules bila tidak berwenang, dan kedua alur menampilkan kondisi loading, kosong, input tidak valid, serta kegagalan layanan.
 
+## Pembagian SRS/Fitur — Sprint 3
+
+Sprint 3 menambahkan validasi lokasi fisik pada presensi, peta interaktif laboratorium Informatika beserta aktivitas praktikum secara real-time, serta push notification berbasis peristiwa (pembukaan sesi, perubahan jadwal, dan keputusan izin). Seluruh fitur tetap terintegrasi dengan Firebase Authentication, Cloud Firestore, dan aturan keamanan dari Sprint 2.
+
+### Programmer 1 — Halaman Presensi Berbasis Lokasi, Peta Laboratorium, dan Client Notifikasi
+
+- Membuat halaman presensi khusus yang terpisah dari halaman detail sesi untuk menampilkan ringkasan sesi, status sesi secara real-time, serta tombol dan alur pencatatan presensi *(opsional: fitur pemindaian QR Code dari sisi praktikan)*.
+- Mengimplementasikan layanan lokasi perangkat (geolocation) dan validasi radius presensi (perhitungan jarak koordinat perangkat terhadap koordinat & radius laboratorium di Firestore). Validasi lokasi wajib menjadi bagian dari proses pencatatan presensi: tolak presensi jika sesi tidak `open`, pengguna berada di luar radius, atau lokasi belum diperoleh; pertahankan pencegahan presensi ganda (ID deterministik/transaksi) dan simpan metadata lokasi/jarak presensi.
+- Mengimplementasikan halaman Maps interaktif yang menampilkan seluruh marker laboratorium Informatika dari Firestore serta marker posisi pengguna yang diperbarui mengikuti pergerakan perangkat selama halaman aktif.
+- Menampilkan informasi laboratorium saat marker dipilih, mencakup data laboratorium serta daftar praktikum yang **sedang berlangsung** (`open`) dan **praktikum berikutnya** (`scheduled`) berdasarkan jadwal/sesi Firestore (nama praktikum, kelas, waktu pelaksanaan, status sesi) yang ikut berubah secara real-time.
+- Mengimplementasikan sisi client push notification: meminta izin notifikasi, mendaftarkan dan menyimpan push token (FCM / Expo Push Token) milik pengguna ke Firestore, serta menangani notifikasi masuk (foreground/background/interaksi klik).
+- Menangani izin dan kondisi perangkat secara menyeluruh pada layar praktikan & Maps: izin lokasi/notifikasi ditolak, GPS/layanan lokasi mati, koordinat belum tersedia, koneksi bermasalah, atau notifikasi gagal diterima, lengkap dengan pesan yang jelas dan opsi coba ulang / buka pengaturan.
+
+### Programmer 2 — Pengelolaan Laboratorium, Pengiriman Push Notification, dan Security Rules
+
+- Menyepakati dan mendokumentasikan perluasan skema Firestore Sprint 3 bersama Programmer 1: koleksi `labs` (nama, koordinat `latitude`/`longitude`, `radiusMeters`, keterangan), relasi `labId` pada `sessions`, metadata lokasi pada `attendance`, serta field/koleksi token notifikasi pengguna.
+- Mengimplementasikan manajemen lokasi laboratorium bagi asisten (CRUD data laboratorium, penentuan koordinat dan radius validasi presensi) yang tersimpan di Firestore agar langsung menjadi acuan validasi presensi dan marker pada halaman Maps.
+- Menghubungkan pembuatan dan penyuntingan jadwal/sesi asisten dengan laboratorium (`labId`) sehingga perubahan jadwal atau status sesi langsung tercermin pada informasi aktivitas laboratorium di peta, serta menampilkan metadata validasi lokasi pada rekap kehadiran *(opsional: menampilkan QR Code sesi bagi asisten)*.
+- Mengimplementasikan mekanisme pemicu dan pengiriman push notification (FCM / Cloud Functions / push service) berdasarkan peristiwa aplikasi kepada pengguna yang berkepentingan:
+  1. Saat asisten membuka sesi praktikum → kirim ke praktikan anggota kelas terkait.
+  2. Saat asisten mengubah jadwal praktikum → kirim ke praktikan anggota kelas terkait.
+  3. Saat asisten menerima atau menolak pengajuan izin → kirim ke praktikan yang mengajukan izin.
+- Menangani kegagalan pengiriman notifikasi agar tidak membatalkan penyimpanan data utama di Firestore serta menampilkan umpan balik yang jelas pada antarmuka asisten.
+- Memperbarui Firebase Security Rules untuk koleksi `labs` (baca untuk pengguna terautentikasi, tulis hanya untuk asisten berwenang), token notifikasi (pengguna hanya mengelola token miliknya sendiri), dan validasi field lokasi pada dokumen `attendance`.
+- Menyiapkan dokumentasi konfigurasi layanan Maps, izin lokasi/notifikasi pada `app.json` (Development Build), serta setup Firebase Cloud Messaging (FCM).
+
+### Kontrak Integrasi Bersama
+
+- Sepakati skema koleksi baru dan tambahan field sebelum implementasi paralel: koleksi `labs` (`id`, `name`, `latitude`, `longitude`, `radiusMeters`, `building`), field `labId` & `labName` pada `sessions`, metadata lokasi (`latitude`, `longitude`, `distanceMeters`) pada `attendance`, serta penyimpanan token notifikasi (`users/{uid}.pushTokens` atau koleksi `deviceTokens`).
+- Pisahkan utilitas lokasi/jarak (mis. rumus Haversine), akses data laboratorium, dan service notifikasi ke dalam layer `src/services/` agar konsisten di seluruh layar.
+- Pastikan validasi sesi (`open`), validasi radius lokasi, dan pencegahan presensi ganda berjalan terpadu pada service presensi sebelum dokumen `attendance` dicatat ke Firestore.
+- Karena fitur Maps, lokasi perangkat, dan FCM membutuhkan modul native, sepakati penggunaan **Development Build (`expo-dev-client`)** bersama setelah konfigurasi plugin native ditambahkan di `app.json`.
+
+### Urutan Pengerjaan dan Kriteria Selesai
+
+1. Bersama-sama menyepakati skema koleksi `labs`, relasi `sessions.labId`, format token notifikasi, konfigurasi plugin Maps & FCM di `app.json`, serta menyiapkan Development Build Android bersama.
+2. Programmer 1 mengerjakan halaman presensi berbasis lokasi, halaman Maps + aktivitas laboratorium real-time, serta penerimaan notifikasi & penanganan izin perangkat; Programmer 2 mengerjakan CRUD laboratorium + integrasi `labId` pada sesi, pemicu pengiriman push notification, pembaruan Security Rules, dan dokumentasi setup.
+3. Demonstrasikan alur **Presensi berbasis lokasi**: asisten membuka sesi → praktikan membuka halaman presensi khusus → aplikasi memeriksa lokasi perangkat terhadap radius lab → presensi ditolak bila di luar radius dan berhasil dicatat (maksimal 1 kali) bila memenuhi ketentuan → asisten melihat rekap kehadiran.
+4. Demonstrasikan alur **Peta dan informasi laboratorium**: pengguna membuka halaman Maps → posisi pengguna dan marker seluruh lab Informatika tampil → pengguna memilih marker lab → informasi praktikum yang sedang berlangsung dan praktikum berikutnya tampil sesuai data Firestore real-time.
+5. Demonstrasikan alur **Notifikasi kegiatan**: asisten membuka sesi, mengubah jadwal, atau memutuskan pengajuan izin → sistem mengirim push notification → praktikan terkait menerima notifikasi, dan kondisi izin ditolak/GPS mati/offline tertangani dengan pesan yang jelas.
+
 ## Reset Project
 
 Gunakan script berikut hanya saat setup awal jika memang diperlukan.
