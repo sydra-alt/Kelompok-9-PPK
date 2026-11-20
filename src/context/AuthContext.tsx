@@ -12,6 +12,7 @@ import {
 import { signOut, subscribeAuthState, subscribeUserProfile } from '@/services/auth-service';
 import { getErrorMessage } from '@/services/errors';
 import { isFirebaseConfigured, missingFirebaseEnv } from '@/services/firebase/config';
+import { unregisterPushToken } from '@/services/notification-service';
 import type { UserProfile } from '@/types';
 
 /**
@@ -101,8 +102,9 @@ export function AuthProvider({ children }: PropsWithChildren) {
 
   const logout = useCallback(async () => {
     if (!isFirebaseConfigured) return;
+    if (authUser?.uid) await unregisterPushToken(authUser.uid);
     await signOut();
-  }, []);
+  }, [authUser]);
 
   const isProfileLoaded = Boolean(expectedKey && profileSnapshot?.key === expectedKey);
   const profile = isProfileLoaded ? (profileSnapshot?.profile ?? null) : null;

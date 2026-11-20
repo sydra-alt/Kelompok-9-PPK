@@ -47,6 +47,8 @@ Profil pengguna terikat pada `uid` Firebase Auth.
 - `email`: `string` (wajib, huruf kecil)
 - `identifier`: `string` (wajib — NIM untuk praktikan, NIP/ID asisten untuk asisten)
 - `role`: `'praktikan' | 'asisten'` (wajib)
+- `pushTokens`: `string[]` (opsional, Expo Push Token untuk perangkat pengguna)
+- `pushTokenUpdatedAt`: `Timestamp` (opsional, waktu token terakhir didaftarkan)
 - `createdAt`: `Timestamp`
 - `updatedAt`: `Timestamp`
 
