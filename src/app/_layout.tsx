@@ -2,6 +2,7 @@ import { DefaultTheme, ThemeProvider } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
 
 import { AnimatedSplashOverlay } from '@/components/animated-icon';
+import { NotificationRuntime } from '@/components/NotificationRuntime';
 import { AppColors } from '@/constants/app-theme';
 import { AssistantDataProvider } from '@/context/AssistantDataContext';
 import { AuthProvider } from '@/context/AuthContext';
@@ -31,6 +32,7 @@ export default function RootLayout() {
           <AssistantDataProvider>
             <AssistantStoreProvider>
               <AnimatedSplashOverlay />
+              <NotificationRuntime />
               <AppNavigator />
             </AssistantStoreProvider>
           </AssistantDataProvider>

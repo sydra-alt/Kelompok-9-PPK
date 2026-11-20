@@ -1,6 +1,6 @@
 import { StatusBar } from 'expo-status-bar';
 import { useMemo, useState } from 'react';
-import { FlatList, Pressable, StyleSheet, Text, View } from 'react-native';
+import { FlatList, Linking, Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { AppButton } from '@/components/AppButton';
 import { ConnectionBanner } from '@/components/ConnectionBanner';
@@ -12,6 +12,8 @@ import { Spacing } from '@/constants/theme';
 import { useAuth } from '@/context/AuthContext';
 import { useStudentData } from '@/context/StudentDataContext';
 import { navigateTo } from '@/navigation/AppNavigator';
+import { getErrorMessage } from '@/services/errors';
+import { registerPushToken } from '@/services/notification-service';
 import type { SessionStatus } from '@/types';
 import { getInitials } from '@/utils/format';
 
@@ -47,6 +49,26 @@ export default function StudentHomeScreen() {
 
   const [filter, setFilter] = useState<Filter>('all');
   const [selectedClassId, setSelectedClassId] = useState<string>('all');
+  const [registeringNotifications, setRegisteringNotifications] = useState(false);
+  const [notificationFeedback, setNotificationFeedback] = useState<string | null>(null);
+  const [notificationSettingsAvailable, setNotificationSettingsAvailable] = useState(false);
+
+  const handleRegisterNotifications = async () => {
+    if (!profile || registeringNotifications) return;
+    setRegisteringNotifications(true);
+    setNotificationFeedback(null);
+    setNotificationSettingsAvailable(false);
+    try {
+      await registerPushToken(profile.uid);
+      setNotificationFeedback('Notifikasi praktikum aktif di perangkat ini.');
+    } catch (error) {
+      const message = getErrorMessage(error, 'Notifikasi gagal diaktifkan. Coba lagi.');
+      setNotificationFeedback(message);
+      setNotificationSettingsAvailable(message.includes('Pengaturan'));
+    } finally {
+      setRegisteringNotifications(false);
+    }
+  };
 
   const attendedIds = useMemo(() => new Set(attendance.map((r) => r.sessionId)), [attendance]);
   const permissionBySession = useMemo(
@@ -228,6 +250,29 @@ export default function StudentHomeScreen() {
               variant="secondary"
               onPress={navigateTo.studentLabsMap}
             />
+            <View style={styles.notificationsCard}>
+              <Text style={styles.notificationsTitle}>Pemberitahuan Praktikum</Text>
+              <Text style={styles.notificationsHint}>
+                Aktifkan notifikasi untuk mendapat kabar pembukaan sesi, perubahan jadwal, dan keputusan izin.
+              </Text>
+              {notificationFeedback ? (
+                <Text style={styles.notificationsFeedback}>{notificationFeedback}</Text>
+              ) : null}
+              <AppButton
+                testID="enable-notifications-button"
+                title={registeringNotifications ? 'Mengaktifkan...' : 'Aktifkan Notifikasi'}
+                variant="secondary"
+                disabled={registeringNotifications}
+                onPress={() => void handleRegisterNotifications()}
+              />
+              {notificationSettingsAvailable ? (
+                <AppButton
+                  title="Buka Pengaturan Aplikasi"
+                  variant="ghost"
+                  onPress={() => void Linking.openSettings()}
+                />
+              ) : null}
+            </View>
 
             <View style={styles.sectionHeader}>
               <Text style={styles.sectionTitle}>Jadwal Praktikum</Text>
@@ -464,6 +509,30 @@ const styles = StyleSheet.create({
   },
   actionButton: {
     flex: 1,
+  },
+  notificationsCard: {
+    backgroundColor: AppColors.surface,
+    borderRadius: Radius.lg,
+    borderWidth: 1,
+    borderColor: AppColors.border,
+    padding: Spacing.three,
+    gap: Spacing.two,
+    ...CardShadow,
+  },
+  notificationsTitle: {
+    color: AppColors.text,
+    fontSize: 14,
+    fontWeight: '800',
+  },
+  notificationsHint: {
+    color: AppColors.textMuted,
+    fontSize: 13,
+    lineHeight: 19,
+  },
+  notificationsFeedback: {
+    color: AppColors.text,
+    fontSize: 13,
+    lineHeight: 19,
   },
   sectionHeader: {
     flexDirection: 'row',
