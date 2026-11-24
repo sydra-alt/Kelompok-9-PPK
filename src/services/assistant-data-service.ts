@@ -3,6 +3,7 @@ import {
   collection,
   deleteDoc,
   doc,
+  getDoc,
   getDocs,
   onSnapshot,
   query,
@@ -18,6 +19,7 @@ import {
 
 import { AppError, withTimeout } from '@/services/errors';
 import { getDb } from '@/services/firebase';
+import { notifyClassStudents, notifyUsers, type PushDispatchResult } from '@/services/notification-service';
 import {
   COLLECTIONS,
   toAttendanceRecord,
@@ -326,7 +328,9 @@ export function validateSessionInput(input: CreateSessionInput): string | null {
   return null;
 }
 
-export async function createSession(input: CreateSessionInput): Promise<string> {
+export async function createSession(
+  input: CreateSessionInput,
+): Promise<{ id: string; notification: PushDispatchResult }> {
   const error = validateSessionInput(input);
   if (error) throw new AppError('invalid-input', error);
 
@@ -350,13 +354,22 @@ export async function createSession(input: CreateSessionInput): Promise<string> 
     WRITE_TIMEOUT_MS,
     'Gagal membuat sesi: koneksi ke server terlalu lama.',
   );
-  return ref.id;
+  const notification = await notifyClassStudents(input.classId, {
+    title: 'Jadwal praktikum baru',
+    body: `${input.practicalName} (${input.className}) dijadwalkan ${input.date} pukul ${input.startTime}.`,
+    data: { type: 'schedule_changed', sessionId: ref.id },
+  });
+  return { id: ref.id, notification };
 }
 
 export async function updateSession(
   sessionId: string,
   updates: Partial<Omit<CreateSessionInput, 'classId'>>,
-): Promise<void> {
+): Promise<PushDispatchResult> {
+  const sessionRef = doc(getDb(), COLLECTIONS.sessions, sessionId);
+  const previousSession = await getDoc(sessionRef);
+  if (!previousSession.exists()) throw new AppError('not-found', 'Sesi tidak ditemukan.');
+  const previousData = previousSession.data();
   const data: Record<string, unknown> = { updatedAt: serverTimestamp() };
   if (updates.practicalName !== undefined) data.practicalName = updates.practicalName.trim();
   if (updates.className !== undefined) data.className = updates.className.trim();
@@ -370,10 +383,19 @@ export async function updateSession(
   if (updates.assistantName !== undefined) data.assistantName = updates.assistantName?.trim() || null;
 
   await withTimeout(
-    updateDoc(doc(getDb(), COLLECTIONS.sessions, sessionId), data),
+    updateDoc(sessionRef, data),
     WRITE_TIMEOUT_MS,
     'Gagal memperbarui sesi: koneksi ke server terlalu lama.',
   );
+
+  const scheduleText = [updates.date ?? previousData.date, updates.startTime ?? previousData.startTime]
+    .filter((value): value is string => typeof value === 'string' && value.length > 0)
+    .join(' pukul ');
+  return notifyClassStudents(previousData.classId, {
+    title: 'Jadwal praktikum berubah',
+    body: `${updates.practicalName ?? previousData.practicalName ?? 'Praktikum'} (${updates.className ?? previousData.className ?? ''}) diperbarui${scheduleText ? `: ${scheduleText}` : '.'}`,
+    data: { type: 'schedule_changed', sessionId },
+  });
 }
 
 export async function deleteSession(sessionId: string): Promise<void> {
@@ -388,15 +410,25 @@ export async function deleteSession(sessionId: string): Promise<void> {
 export async function updateSessionStatus(
   sessionId: string,
   status: 'open' | 'closed',
-): Promise<void> {
+): Promise<PushDispatchResult | null> {
+  const sessionRef = doc(getDb(), COLLECTIONS.sessions, sessionId);
+  const sessionSnapshot = await getDoc(sessionRef);
+  if (!sessionSnapshot.exists()) throw new AppError('not-found', 'Sesi tidak ditemukan.');
+  const session = sessionSnapshot.data();
   await withTimeout(
-    updateDoc(doc(getDb(), COLLECTIONS.sessions, sessionId), {
+    updateDoc(sessionRef, {
       status,
       updatedAt: serverTimestamp(),
     }),
     WRITE_TIMEOUT_MS,
     `Gagal ${status === 'open' ? 'membuka' : 'menutup'} sesi: koneksi ke server terlalu lama.`,
   );
+  if (status !== 'open') return null;
+  return notifyClassStudents(session.classId, {
+    title: 'Sesi praktikum dibuka',
+    body: `${session.practicalName ?? 'Praktikum'} (${session.className ?? 'kelas'}) telah dibuka. Presensi sekarang tersedia.`,
+    data: { type: 'session_opened', sessionId },
+  });
 }
 
 // ---------------------------------------------------------------------------
@@ -476,13 +508,18 @@ export async function decidePermissionRequest(
   decision: PermissionStatus,
   assistant: UserProfile,
   note?: string,
-): Promise<void> {
+): Promise<PushDispatchResult> {
   if (decision === 'pending') {
     throw new AppError('invalid-input', 'Status keputusan tidak valid.');
   }
 
+  const requestRef = doc(getDb(), COLLECTIONS.permissionRequests, requestId);
+  const requestSnapshot = await getDoc(requestRef);
+  if (!requestSnapshot.exists()) throw new AppError('not-found', 'Pengajuan izin tidak ditemukan.');
+  const permission = requestSnapshot.data();
+
   await withTimeout(
-    updateDoc(doc(getDb(), COLLECTIONS.permissionRequests, requestId), {
+    updateDoc(requestRef, {
       status: decision,
       decidedBy: assistant.uid,
       decidedByName: assistant.name,
@@ -493,5 +530,12 @@ export async function decidePermissionRequest(
     WRITE_TIMEOUT_MS,
     'Gagal menyimpan keputusan izin: koneksi ke server terlalu lama.',
   );
+
+  const approved = decision === 'approved';
+  return notifyUsers([permission.studentId], {
+    title: approved ? 'Pengajuan izin disetujui' : 'Pengajuan izin ditolak',
+    body: `Pengajuan izin untuk ${permission.practicalName ?? 'sesi praktikum'} ${approved ? 'telah disetujui' : 'ditolak'} oleh asisten.`,
+    data: { type: approved ? 'permission_approved' : 'permission_rejected', sessionId: permission.sessionId },
+  });
 }
 

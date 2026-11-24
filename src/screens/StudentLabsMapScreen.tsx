@@ -11,6 +11,7 @@ import { AppColors, CardShadow, Radius } from '@/constants/app-theme';
 import { Spacing } from '@/constants/theme';
 import { useAuth } from '@/context/AuthContext';
 import { useStudentData } from '@/context/StudentDataContext';
+import { ConnectionBanner } from '@/components/ConnectionBanner';
 import { getErrorMessage } from '@/services/errors';
 import { getCurrentDeviceLocation, watchDeviceLocation } from '@/services/location-service';
 import { subscribeLabs } from '@/services/student-data-service';
@@ -155,11 +156,13 @@ function createGoogleMapsHtml(apiKey: string) {
 
 export default function StudentLabsMapScreen() {
   const { profile } = useAuth();
-  const { sessions } = useStudentData();
+  const { sessions, error: studentDataError, fromCache, isOffline, retry } = useStudentData();
   const mapRef = useRef<WebView<object> | null>(null);
   const [labs, setLabs] = useState<Lab[]>([]);
   const [labsLoading, setLabsLoading] = useState(true);
   const [labsError, setLabsError] = useState<string | null>(null);
+  const [labsFromCache, setLabsFromCache] = useState(false);
+  const [labsRetryKey, setLabsRetryKey] = useState(0);
   const [selectedLabId, setSelectedLabId] = useState<string | null>(null);
   const [deviceLocation, setDeviceLocation] = useState<Coordinates | null>(null);
   const [locationError, setLocationError] = useState<string | null>(null);
@@ -172,8 +175,9 @@ export default function StudentLabsMapScreen() {
   const selectedMapLabId = selectedLab?.id;
   useEffect(() => {
     return subscribeLabs(
-      (nextLabs) => {
+      (nextLabs, meta) => {
         setLabs(nextLabs);
+        setLabsFromCache(meta.fromCache);
         setLabsLoading(false);
         setLabsError(null);
       },
@@ -182,7 +186,7 @@ export default function StudentLabsMapScreen() {
         setLabsError(getErrorMessage(error, 'Gagal memuat laboratorium dari Firestore.'));
       },
     );
-  }, []);
+  }, [labsRetryKey]);
 
   useEffect(() => {
     let active = true;
@@ -263,6 +267,13 @@ export default function StudentLabsMapScreen() {
     return { active, next };
   }, [selectedLab, sessions]);
 
+  const retryMapData = () => {
+    setLabsError(null);
+    setLabsLoading(true);
+    setLabsRetryKey((key) => key + 1);
+    retry();
+  };
+
   if (!profile || profile.role !== 'praktikan') {
     return (
       <EmptyState
@@ -276,12 +287,27 @@ export default function StudentLabsMapScreen() {
   }
 
   if (labsLoading && labs.length === 0) {
-    return <LoadingState title="Memuat peta laboratorium..." message="Mengambil lokasi lab dari Firestore." />;
+    return (
+      <View style={styles.loadingScreen}>
+        <ConnectionBanner
+          isOffline={isOffline}
+          fromCache={fromCache || labsFromCache}
+          error={labsError ?? studentDataError}
+          onRetry={retryMapData}
+        />
+        <LoadingState title="Memuat peta laboratorium..." message="Mengambil lokasi lab dari Firestore." />
+      </View>
+    );
   }
 
   return (
     <ScrollView contentContainerStyle={styles.content}>
-      {labsError ? <Text style={styles.errorMessage}>{labsError}</Text> : null}
+      <ConnectionBanner
+        isOffline={isOffline}
+        fromCache={fromCache || labsFromCache}
+        error={labsError ?? studentDataError}
+        onRetry={retryMapData}
+      />
       {locationError ? (
         <View style={styles.locationNotice}>
           <Text style={styles.noticeText}>{locationError}</Text>
@@ -384,6 +410,12 @@ function ActivityRow({ session, statusLabel }: { session: PracticeSession; statu
 }
 
 const styles = StyleSheet.create({
+  loadingScreen: {
+    flex: 1,
+    backgroundColor: AppColors.background,
+    padding: Spacing.three,
+    gap: Spacing.three,
+  },
   content: {
     width: '100%',
     maxWidth: 900,

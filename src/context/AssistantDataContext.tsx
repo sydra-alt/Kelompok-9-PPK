@@ -32,6 +32,7 @@ import {
   type CreateSessionInput,
 } from '@/services/assistant-data-service';
 import { getErrorMessage } from '@/services/errors';
+import type { PushDispatchResult } from '@/services/notification-service';
 import { subscribeLabs } from '@/services/student-data-service';
 import type {
   AttendanceRecord,
@@ -75,12 +76,12 @@ interface AssistantDataContextValue {
   addMember: (input: AddMemberInput) => Promise<string>;
   removeMember: (memberId: string) => Promise<void>;
   // CRUD Sesi & Status
-  createSession: (input: CreateSessionInput) => Promise<string>;
-  updateSession: (sessionId: string, updates: Partial<Omit<CreateSessionInput, 'classId'>>) => Promise<void>;
+  createSession: (input: CreateSessionInput) => Promise<{ id: string; notification: PushDispatchResult }>;
+  updateSession: (sessionId: string, updates: Partial<Omit<CreateSessionInput, 'classId'>>) => Promise<PushDispatchResult>;
   deleteSession: (sessionId: string) => Promise<void>;
-  setSessionStatus: (sessionId: string, status: SessionStatus) => Promise<void>;
+  setSessionStatus: (sessionId: string, status: SessionStatus) => Promise<PushDispatchResult | null>;
   // Keputusan Izin
-  decidePermission: (requestId: string, decision: PermissionStatus, note?: string) => Promise<void>;
+  decidePermission: (requestId: string, decision: PermissionStatus, note?: string) => Promise<PushDispatchResult>;
 }
 
 interface KeyedData<T> {

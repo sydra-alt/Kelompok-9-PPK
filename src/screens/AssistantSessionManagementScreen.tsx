@@ -102,11 +102,11 @@ export default function AssistantSessionManagementScreen() {
     if (!session || !pendingAction) return;
     const nextStatus: SessionStatus = pendingAction === 'open' ? 'open' : 'closed';
     try {
-      await setSessionStatus(session.id, nextStatus);
+      const pushResult = await setSessionStatus(session.id, nextStatus);
       setFeedbackType('success');
       setFeedback(
         pendingAction === 'open'
-          ? 'Sesi berhasil dibuka. Praktikan sekarang dapat melakukan presensi secara real-time.'
+          ? `Sesi berhasil dibuka. Praktikan sekarang dapat melakukan presensi secara real-time. ${pushResult?.warning ?? `${pushResult?.acceptedCount ?? 0} notifikasi diterima antrean Expo.`}`
           : 'Sesi berhasil ditutup. Praktikan tidak dapat lagi melakukan presensi untuk sesi ini.',
       );
     } catch (err: unknown) {
@@ -274,7 +274,7 @@ export default function AssistantSessionManagementScreen() {
         defaultAssistantName={assistantName}
         onClose={() => setEditModalVisible(false)}
         onSubmit={async (data) => {
-          await updateSession(session.id, {
+          const pushResult = await updateSession(session.id, {
             date: data.date,
             startTime: data.startTime,
             endTime: data.endTime,
@@ -287,7 +287,9 @@ export default function AssistantSessionManagementScreen() {
             labName: data.labName,
           });
           setFeedbackType('success');
-          setFeedback('Informasi sesi berhasil diperbarui.');
+          setFeedback(
+            `Informasi sesi berhasil diperbarui. ${pushResult.warning ?? `${pushResult.acceptedCount} notifikasi diterima antrean Expo.`}`,
+          );
         }}
       />
 

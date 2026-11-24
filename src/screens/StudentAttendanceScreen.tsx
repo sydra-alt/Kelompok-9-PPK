@@ -112,7 +112,7 @@ export default function StudentAttendanceScreen() {
     setSubmitting(true);
     setFeedback(null);
     try {
-      await submitAttendance(profile, session.id);
+      await submitAttendance(session.id);
       setFeedback('Presensi berhasil dicatat. Data kehadiran sudah tersimpan.');
     } catch (error) {
       setFeedback(getErrorMessage(error, 'Presensi gagal. Periksa koneksi dan coba lagi.'));

@@ -2,6 +2,7 @@ import { useLocalSearchParams } from 'expo-router';
 import { useMemo, useState } from 'react';
 import {
   FlatList,
+  Linking,
   Pressable,
   StyleSheet,
   Text,
@@ -26,6 +27,8 @@ import { Spacing } from '@/constants/theme';
 import { useAssistantData } from '@/context/AssistantDataContext';
 import { useAuth } from '@/context/AuthContext';
 import { getUserById } from '@/data/users';
+import { getErrorMessage } from '@/services/errors';
+import { registerPushToken } from '@/services/notification-service';
 import { navigateTo } from '@/navigation/AppNavigator';
 import { findStudentByIdentifier } from '@/services/assistant-data-service';
 import type {
@@ -98,6 +101,26 @@ export default function AssistantHomeScreen() {
   const [sessionFilter, setSessionFilter] = useState<SessionFilter>('all');
   const [permissionFilter, setPermissionFilter] = useState<PermissionFilter>('all');
   const [feedback, setFeedback] = useState<Feedback | null>(null);
+  const [registeringNotifications, setRegisteringNotifications] = useState(false);
+  const [notificationFeedback, setNotificationFeedback] = useState<string | null>(null);
+  const [notificationSettingsAvailable, setNotificationSettingsAvailable] = useState(false);
+
+  const handleRegisterNotifications = async () => {
+    if (!profile || registeringNotifications) return;
+    setRegisteringNotifications(true);
+    setNotificationFeedback(null);
+    setNotificationSettingsAvailable(false);
+    try {
+      await registerPushToken(profile.uid);
+      setNotificationFeedback('Token notifikasi asisten berhasil didaftarkan pada perangkat ini.');
+    } catch (error) {
+      const message = getErrorMessage(error, 'Pendaftaran notifikasi gagal. Coba lagi.');
+      setNotificationFeedback(message);
+      setNotificationSettingsAvailable(message.includes('Pengaturan'));
+    } finally {
+      setRegisteringNotifications(false);
+    }
+  };
 
   // Modals state
   const [classModalVisible, setClassModalVisible] = useState(false);
@@ -159,13 +182,13 @@ export default function AssistantHomeScreen() {
     if (!toggleStatusModal) return;
     const { session, nextStatus } = toggleStatusModal;
     try {
-      await setSessionStatus(session.id, nextStatus);
+      const pushResult = await setSessionStatus(session.id, nextStatus);
       setFeedback({
         type: 'success',
         title: 'Status sesi berhasil diperbarui',
         message:
           nextStatus === 'open'
-            ? `Sesi ${session.practicalName} (${session.className}) berhasil dibuka. Praktikan dapat melakukan presensi.`
+            ? `Sesi ${session.practicalName} (${session.className}) berhasil dibuka. Praktikan dapat melakukan presensi. ${pushResult?.warning ?? `${pushResult?.acceptedCount ?? 0} notifikasi diterima antrean Expo.`}`
             : `Sesi ${session.practicalName} (${session.className}) berhasil ditutup. Presensi dinonaktifkan.`,
       });
     } catch (err: unknown) {
@@ -267,6 +290,27 @@ export default function AssistantHomeScreen() {
               error={error}
               onRetry={retry}
             />
+
+            <View style={styles.notificationCard}>
+              <Text style={styles.notificationTitle}>Notifikasi Asisten</Text>
+              <Text style={styles.notificationHint}>
+                Daftarkan perangkat ini untuk menerima push notification jika nanti ada pemberitahuan yang ditujukan kepada asisten.
+              </Text>
+              {notificationFeedback ? <Text style={styles.notificationFeedback}>{notificationFeedback}</Text> : null}
+              <AppButton
+                title={registeringNotifications ? 'Mendaftarkan...' : 'Aktifkan Notifikasi Asisten'}
+                variant="secondary"
+                disabled={registeringNotifications}
+                onPress={() => void handleRegisterNotifications()}
+              />
+              {notificationSettingsAvailable ? (
+                <AppButton
+                  title="Buka Pengaturan Aplikasi"
+                  variant="ghost"
+                  onPress={() => void Linking.openSettings()}
+                />
+              ) : null}
+            </View>
 
             {feedback ? (
               <FeedbackBanner
@@ -679,11 +723,11 @@ export default function AssistantHomeScreen() {
         defaultAssistantName={assistantName}
         onClose={() => setSessionModalVisible(false)}
         onSubmit={async (data) => {
-          await createSession(data);
+          const created = await createSession(data);
           setFeedback({
             type: 'success',
             title: 'Sesi praktikum dijadwalkan',
-            message: `Sesi ${data.practicalName} (${data.className}) berhasil dibuat.`,
+            message: `Sesi ${data.practicalName} (${data.className}) berhasil dibuat. ${created.notification.warning ?? `${created.notification.acceptedCount} notifikasi diterima antrean Expo.`}`,
           });
         }}
       />
@@ -714,11 +758,11 @@ export default function AssistantHomeScreen() {
           setSelectedPermission(null);
         }}
         onDecide={async (requestId, decision, note) => {
-          await decidePermission(requestId, decision, note);
+          const pushResult = await decidePermission(requestId, decision, note);
           setFeedback({
             type: 'success',
             title: 'Keputusan izin tersimpan',
-            message: `Pengajuan izin berhasil ${decision === 'approved' ? 'disetujui' : 'ditolak'}.`,
+            message: `Pengajuan izin berhasil ${decision === 'approved' ? 'disetujui' : 'ditolak'}. ${pushResult.warning ?? `${pushResult.acceptedCount} notifikasi diterima antrean Expo.`}`,
           });
         }}
       />
@@ -790,6 +834,18 @@ const styles = StyleSheet.create({
     padding: Spacing.four,
     gap: Spacing.four,
   },
+  notificationCard: {
+    backgroundColor: AppColors.surface,
+    borderRadius: Radius.lg,
+    borderWidth: 1,
+    borderColor: AppColors.border,
+    padding: Spacing.three,
+    gap: Spacing.two,
+    ...CardShadow,
+  },
+  notificationTitle: { color: AppColors.text, fontSize: 14, fontWeight: '800' },
+  notificationHint: { color: AppColors.textMuted, fontSize: 13, lineHeight: 19 },
+  notificationFeedback: { color: AppColors.text, fontSize: 13, lineHeight: 19 },
   profileRow: {
     flexDirection: 'row',
     alignItems: 'center',
