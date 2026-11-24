@@ -27,6 +27,7 @@ import { useAssistantData } from '@/context/AssistantDataContext';
 import { useAuth } from '@/context/AuthContext';
 import { getUserById } from '@/data/users';
 import { navigateTo } from '@/navigation/AppNavigator';
+import { findStudentByIdentifier } from '@/services/assistant-data-service';
 import type {
   PermissionRequest,
   PermissionStatus,
@@ -688,6 +689,7 @@ export default function AssistantHomeScreen() {
       <MemberFormModal
         visible={memberModalVisible}
         targetClass={targetMemberClass}
+        onLookup={findStudentByIdentifier}
         onClose={() => {
           setMemberModalVisible(false);
           setTargetMemberClass(null);

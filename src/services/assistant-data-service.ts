@@ -3,6 +3,7 @@ import {
   collection,
   deleteDoc,
   doc,
+  getDocs,
   onSnapshot,
   query,
   serverTimestamp,
@@ -24,6 +25,7 @@ import {
   toPermissionRequest,
   toPracticeClass,
   toPracticeSession,
+  toUserProfile,
 } from '@/services/firestore-schema';
 import type {
   AttendanceRecord,
@@ -203,6 +205,28 @@ export interface AddMemberInput {
   studentId: string;
   studentName: string;
   studentIdentifier: string;
+}
+
+/** Cari akun praktikan terdaftar berdasarkan NIM tanpa meminta asisten memasukkan UID. */
+export async function findStudentByIdentifier(identifier: string): Promise<UserProfile | null> {
+  const nim = identifier.trim();
+  if (!nim) throw new AppError('invalid-input', 'Masukkan NIM praktikan terlebih dahulu.');
+
+  const snapshot = await getDocs(
+    query(collection(getDb(), COLLECTIONS.users), where('identifier', '==', nim)),
+  );
+  const students = snapshot.docs
+    .map(toUserProfile)
+    .filter((profile): profile is UserProfile => profile?.role === 'praktikan');
+
+  if (students.length > 1) {
+    throw new AppError(
+      'duplicate-student-identifier',
+      'NIM ini terdaftar pada lebih dari satu akun praktikan. Periksa data pengguna di Firebase.',
+    );
+  }
+
+  return students[0] ?? null;
 }
 
 export async function addClassMember(input: AddMemberInput): Promise<string> {
