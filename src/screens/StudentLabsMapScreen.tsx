@@ -1,7 +1,8 @@
-import MapView, { Circle, Marker, type Region } from 'react-native-maps';
+import Constants from 'expo-constants';
 import { router } from 'expo-router';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Linking, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { WebView, type WebViewMessageEvent } from 'react-native-webview';
 
 import { AppButton } from '@/components/AppButton';
 import { EmptyState } from '@/components/EmptyState';
@@ -17,17 +18,145 @@ import type { Lab, PracticeSession } from '@/types';
 import type { Coordinates } from '@/utils/distance';
 import { nowLocalDateTime, formatDate, formatTimeRange } from '@/utils/format';
 
-const FALLBACK_REGION: Region = {
-  latitude: -7.049,
-  longitude: 110.438004,
-  latitudeDelta: 0.025,
-  longitudeDelta: 0.025,
-};
+const GOOGLE_MAPS_API_KEY = Constants.expoConfig?.extra?.googleMapsApiKey;
+
+function createGoogleMapsHtml(apiKey: string) {
+  const scriptUrl = `https://maps.googleapis.com/maps/api/js?key=${encodeURIComponent(apiKey)}&callback=initMap&loading=async`;
+
+  return `<!doctype html>
+<html>
+  <head>
+    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no" />
+    <meta name="color-scheme" content="light" />
+    <style>
+      html, body, #map { width: 100%; height: 100%; margin: 0; padding: 0; overflow: hidden; }
+      body { background: #f1f5f9; font-family: Arial, sans-serif; }
+    </style>
+  </head>
+  <body>
+    <div id="map" aria-label="Peta laboratorium"></div>
+    <script>
+      let map;
+      let labMarkers = new Map();
+      let userMarker = null;
+      let attendanceCircle = null;
+      let previousSelectedLabId = null;
+
+      function sendMessage(message) {
+        if (window.ReactNativeWebView) {
+          window.ReactNativeWebView.postMessage(JSON.stringify(message));
+        }
+      }
+
+      window.gm_authFailure = function () {
+        sendMessage({ type: 'error', message: 'Google menolak Maps Demo Key untuk konfigurasi peta ini. Pastikan key mendukung Maps JavaScript API dan kuota harian belum habis.' });
+      };
+
+      window.initMap = function () {
+        map = new google.maps.Map(document.getElementById('map'), {
+          center: { lat: -7.05436, lng: 110.43553 },
+          zoom: 15,
+          clickableIcons: false,
+          fullscreenControl: false,
+          mapTypeControl: false,
+          streetViewControl: false,
+          gestureHandling: 'greedy'
+        });
+        sendMessage({ type: 'ready' });
+      };
+
+      window.updateMapData = function (data) {
+        if (!map) return;
+        const labs = Array.isArray(data.labs) ? data.labs : [];
+        const nextIds = new Set(labs.map((lab) => lab.id));
+
+        for (const [id, marker] of labMarkers.entries()) {
+          if (!nextIds.has(id)) {
+            marker.setMap(null);
+            labMarkers.delete(id);
+          }
+        }
+
+        for (const lab of labs) {
+          const position = { lat: lab.latitude, lng: lab.longitude };
+          let marker = labMarkers.get(lab.id);
+          if (!marker) {
+            marker = new google.maps.Marker({ map, position, title: lab.name });
+            marker.addListener('click', () => sendMessage({ type: 'selectLab', labId: lab.id }));
+            labMarkers.set(lab.id, marker);
+          } else {
+            marker.setPosition(position);
+            marker.setTitle(lab.name);
+          }
+          marker.setIcon(lab.id === data.selectedLabId
+            ? 'https://maps.google.com/mapfiles/ms/icons/blue-dot.png'
+            : null);
+        }
+
+        const selectedLab = labs.find((lab) => lab.id === data.selectedLabId) || labs[0];
+        if (attendanceCircle) attendanceCircle.setMap(null);
+        if (selectedLab) {
+          const center = { lat: selectedLab.latitude, lng: selectedLab.longitude };
+          attendanceCircle = new google.maps.Circle({
+            map,
+            center,
+            radius: selectedLab.radiusMeters,
+            strokeColor: '#4f46e5',
+            strokeOpacity: 0.8,
+            strokeWeight: 2,
+            fillColor: '#4f46e5',
+            fillOpacity: 0.12,
+            clickable: false
+          });
+          if (previousSelectedLabId !== selectedLab.id) {
+            map.panTo(center);
+            map.setZoom(16);
+          }
+          previousSelectedLabId = selectedLab.id;
+        }
+
+        if (data.deviceLocation) {
+          const position = { lat: data.deviceLocation.latitude, lng: data.deviceLocation.longitude };
+          if (!userMarker) {
+            userMarker = new google.maps.Marker({
+              map,
+              position,
+              title: 'Lokasi Anda',
+              icon: {
+                path: google.maps.SymbolPath.CIRCLE,
+                scale: 8,
+                fillColor: '#15803d',
+                fillOpacity: 1,
+                strokeColor: '#ffffff',
+                strokeWeight: 2
+              },
+              zIndex: 1000
+            });
+          } else {
+            userMarker.setPosition(position);
+          }
+        } else if (userMarker) {
+          userMarker.setMap(null);
+          userMarker = null;
+        }
+      };
+
+      const mapsScript = document.createElement('script');
+      mapsScript.src = ${JSON.stringify(scriptUrl)};
+      mapsScript.async = true;
+      mapsScript.onerror = function () {
+        sendMessage({ type: 'error', message: 'Google Maps JavaScript API gagal dimuat. Periksa koneksi internet dan Maps Demo Key.' });
+      };
+      document.head.appendChild(mapsScript);
+    </script>
+  </body>
+</html>`;
+}
 
 export default function StudentLabsMapScreen() {
   const { profile } = useAuth();
   const { sessions } = useStudentData();
-  const mapRef = useRef<MapView | null>(null);
+  const mapRef = useRef<WebView<object> | null>(null);
   const [labs, setLabs] = useState<Lab[]>([]);
   const [labsLoading, setLabsLoading] = useState(true);
   const [labsError, setLabsError] = useState<string | null>(null);
@@ -35,12 +164,12 @@ export default function StudentLabsMapScreen() {
   const [deviceLocation, setDeviceLocation] = useState<Coordinates | null>(null);
   const [locationError, setLocationError] = useState<string | null>(null);
   const [locationRetryKey, setLocationRetryKey] = useState(0);
+  const [mapReady, setMapReady] = useState(false);
+  const [mapError, setMapError] = useState<string | null>(null);
+  const [mapReloadKey, setMapReloadKey] = useState(0);
 
   const selectedLab = labs.find((lab) => lab.id === selectedLabId) ?? labs[0] ?? null;
   const selectedMapLabId = selectedLab?.id;
-  const selectedLatitude = selectedLab?.latitude;
-  const selectedLongitude = selectedLab?.longitude;
-
   useEffect(() => {
     return subscribeLabs(
       (nextLabs) => {
@@ -89,23 +218,36 @@ export default function StudentLabsMapScreen() {
   }, [locationRetryKey]);
 
   useEffect(() => {
-    if (
-      !selectedMapLabId ||
-      selectedLatitude === undefined ||
-      selectedLongitude === undefined
-    ) {
-      return;
+    if (!mapReady) return;
+    const payload = JSON.stringify({
+      labs: labs.map((lab) => ({
+        id: lab.id,
+        name: lab.name,
+        latitude: lab.latitude,
+        longitude: lab.longitude,
+        radiusMeters: lab.radiusMeters,
+      })),
+      selectedLabId: selectedMapLabId ?? null,
+      deviceLocation,
+    }).replace(/</g, '\\u003c');
+    mapRef.current?.injectJavaScript(`window.updateMapData && window.updateMapData(${payload}); true;`);
+  }, [deviceLocation, labs, mapReady, selectedLabId, selectedMapLabId]);
+
+  const handleMapMessage = (event: WebViewMessageEvent) => {
+    try {
+      const message = JSON.parse(event.nativeEvent.data) as { type?: string; labId?: string; message?: string };
+      if (message.type === 'ready') {
+        setMapError(null);
+        setMapReady(true);
+      } else if (message.type === 'selectLab' && typeof message.labId === 'string') {
+        setSelectedLabId(message.labId);
+      } else if (message.type === 'error') {
+        setMapError(message.message ?? 'Google Maps gagal dimuat.');
+      }
+    } catch {
+      setMapError('Respons dari peta tidak dapat dibaca. Muat ulang peta lalu coba lagi.');
     }
-    mapRef.current?.animateToRegion(
-      {
-        latitude: selectedLatitude,
-        longitude: selectedLongitude,
-        latitudeDelta: 0.008,
-        longitudeDelta: 0.008,
-      },
-      350,
-    );
-  }, [selectedMapLabId, selectedLatitude, selectedLongitude]);
+  };
 
   const activity = useMemo(() => {
     if (!selectedLab) return { active: [], next: null };
@@ -120,23 +262,6 @@ export default function StudentLabsMapScreen() {
       .sort((a, b) => `${a.date}${a.startTime}`.localeCompare(`${b.date}${b.startTime}`))[0] ?? null;
     return { active, next };
   }, [selectedLab, sessions]);
-
-  const initialRegion: Region =
-    selectedLatitude !== undefined && selectedLongitude !== undefined
-      ? {
-          latitude: selectedLatitude,
-          longitude: selectedLongitude,
-          latitudeDelta: 0.025,
-          longitudeDelta: 0.025,
-        }
-      : deviceLocation
-        ? {
-            latitude: deviceLocation.latitude,
-            longitude: deviceLocation.longitude,
-            latitudeDelta: 0.025,
-            longitudeDelta: 0.025,
-          }
-        : FALLBACK_REGION;
 
   if (!profile || profile.role !== 'praktikan') {
     return (
@@ -170,40 +295,39 @@ export default function StudentLabsMapScreen() {
       ) : null}
 
       <View style={styles.mapFrame}>
-        <MapView
-          ref={mapRef}
-          style={styles.map}
-          initialRegion={initialRegion}
-          showsCompass
-          showsScale
-          toolbarEnabled={false}>
-          {labs.map((lab) => (
-            <Marker
-              key={lab.id}
-              coordinate={{ latitude: lab.latitude, longitude: lab.longitude }}
-              title={lab.name}
-              description={lab.building}
-              onPress={() => setSelectedLabId(lab.id)}
-              pinColor={lab.id === selectedLab?.id ? AppColors.primary : undefined}
+        {GOOGLE_MAPS_API_KEY ? (
+          <WebView<object>
+            key={mapReloadKey}
+            ref={mapRef}
+            style={styles.map}
+            originWhitelist={['*']}
+            source={{ html: createGoogleMapsHtml(GOOGLE_MAPS_API_KEY) }}
+            javaScriptEnabled
+            domStorageEnabled
+            scrollEnabled={false}
+            onMessage={handleMapMessage}
+            onError={(event) => setMapError(event.nativeEvent.description || 'WebView gagal memuat peta.')}
+            onHttpError={(event) => setMapError(`Peta gagal dimuat (HTTP ${event.nativeEvent.statusCode}).`)}
+          />
+        ) : (
+          <View style={styles.mapFallback}>
+            <Text style={styles.mapErrorText}>Maps Demo Key belum tersedia pada konfigurasi aplikasi.</Text>
+          </View>
+        )}
+        {mapError ? (
+          <View style={styles.mapErrorOverlay}>
+            <Text style={styles.mapErrorText}>{mapError}</Text>
+            <AppButton
+              title="Muat Ulang Peta"
+              variant="secondary"
+              onPress={() => {
+                setMapError(null);
+                setMapReady(false);
+                setMapReloadKey((key) => key + 1);
+              }}
             />
-          ))}
-          {selectedLab ? (
-            <Circle
-              center={{ latitude: selectedLab.latitude, longitude: selectedLab.longitude }}
-              radius={selectedLab.radiusMeters}
-              strokeColor="rgba(79, 70, 229, 0.8)"
-              fillColor="rgba(79, 70, 229, 0.12)"
-            />
-          ) : null}
-          {deviceLocation ? (
-            <Marker
-              coordinate={deviceLocation}
-              title="Lokasi Anda"
-              description="Posisi diperbarui selama halaman peta terbuka."
-              pinColor="#15803D"
-            />
-          ) : null}
-        </MapView>
+          </View>
+        ) : null}
       </View>
 
       {labs.length === 0 ? (
@@ -276,6 +400,18 @@ const styles = StyleSheet.create({
     borderColor: AppColors.border,
   },
   map: { flex: 1 },
+  mapFallback: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: Spacing.three },
+  mapErrorOverlay: {
+    position: 'absolute',
+    left: Spacing.two,
+    right: Spacing.two,
+    top: Spacing.two,
+    padding: Spacing.two,
+    gap: Spacing.two,
+    backgroundColor: AppColors.surface,
+    borderRadius: Radius.md,
+  },
+  mapErrorText: { color: AppColors.danger, fontSize: 13, lineHeight: 19 },
   card: {
     backgroundColor: AppColors.surface,
     borderRadius: Radius.lg,
