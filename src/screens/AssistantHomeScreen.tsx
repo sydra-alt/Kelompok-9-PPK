@@ -73,6 +73,7 @@ export default function AssistantHomeScreen() {
 
   const {
     classes,
+    labs,
     sessions,
     attendance,
     permissionRequests,
@@ -674,6 +675,7 @@ export default function AssistantHomeScreen() {
       <SessionFormModal
         visible={sessionModalVisible}
         classes={classes}
+        labs={labs}
         defaultAssistantName={assistantName}
         onClose={() => setSessionModalVisible(false)}
         onSubmit={async (data) => {

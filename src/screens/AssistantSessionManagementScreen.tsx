@@ -39,6 +39,7 @@ export default function AssistantSessionManagementScreen() {
 
   const {
     classes,
+    labs,
     sessions,
     attendance,
     setSessionStatus,
@@ -268,6 +269,7 @@ export default function AssistantSessionManagementScreen() {
       <SessionFormModal
         visible={editModalVisible}
         classes={classes}
+        labs={labs}
         initialData={session}
         defaultAssistantName={assistantName}
         onClose={() => setEditModalVisible(false)}
@@ -281,6 +283,8 @@ export default function AssistantSessionManagementScreen() {
             assistantName: data.assistantName,
             practicalName: data.practicalName,
             className: data.className,
+            labId: data.labId,
+            labName: data.labName,
           });
           setFeedbackType('success');
           setFeedback('Informasi sesi berhasil diperbarui.');

@@ -304,6 +304,8 @@ export function subscribeSession(
 
 export interface CreateSessionInput {
   classId: string;
+  labId: string;
+  labName: string;
   practicalName: string;
   className: string;
   date: string;
@@ -316,6 +318,7 @@ export interface CreateSessionInput {
 
 export function validateSessionInput(input: CreateSessionInput): string | null {
   if (!input.classId) return 'Kelas wajib dipilih.';
+  if (!input.labId.trim()) return 'Lokasi presensi wajib dipilih.';
   if (!input.date) return 'Tanggal wajib diisi.';
   if (!input.startTime) return 'Waktu mulai wajib diisi.';
   if (!input.endTime) return 'Waktu selesai wajib diisi.';
@@ -330,6 +333,8 @@ export async function createSession(input: CreateSessionInput): Promise<string> 
   const ref = await withTimeout<DocumentReference>(
     addDoc(collection(getDb(), COLLECTIONS.sessions), {
       classId: input.classId,
+      labId: input.labId,
+      labName: input.labName.trim(),
       practicalName: input.practicalName.trim(),
       className: input.className.trim(),
       date: input.date,
@@ -355,6 +360,8 @@ export async function updateSession(
   const data: Record<string, unknown> = { updatedAt: serverTimestamp() };
   if (updates.practicalName !== undefined) data.practicalName = updates.practicalName.trim();
   if (updates.className !== undefined) data.className = updates.className.trim();
+  if (updates.labId !== undefined) data.labId = updates.labId.trim();
+  if (updates.labName !== undefined) data.labName = updates.labName.trim();
   if (updates.date !== undefined) data.date = updates.date;
   if (updates.startTime !== undefined) data.startTime = updates.startTime;
   if (updates.endTime !== undefined) data.endTime = updates.endTime;
