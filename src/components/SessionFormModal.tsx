@@ -100,9 +100,11 @@ function SessionFormContent({
   const [selectedClassId, setSelectedClassId] = useState(
     initialData?.classId ?? classes[0]?.id ?? '',
   );
-  const initialLabId = initialData?.labId ?? labs[0]?.id ?? '';
-  const initialLab = labs.find((l) => l.id === initialLabId) ?? labs[0];
-  const [selectedLabId, setSelectedLabId] = useState(initialLabId);
+  const [preferredLabId, setPreferredLabId] = useState(initialData?.labId ?? labs[0]?.id ?? '');
+  const selectedLabId = labs.some((lab) => lab.id === preferredLabId)
+    ? preferredLabId
+    : labs[0]?.id ?? '';
+  const initialLab = labs.find((l) => l.id === selectedLabId);
   const [date, setDate] = useState(initialData?.date ?? todayDate);
   const [startTime, setStartTime] = useState(initialData?.startTime ?? '08:00');
   const [endTime, setEndTime] = useState(initialData?.endTime ?? '10:00');
@@ -116,7 +118,7 @@ function SessionFormContent({
 
   const handleSelectLab = (nextLab: Lab) => {
     const previousLab = labs.find((l) => l.id === selectedLabId);
-    setSelectedLabId(nextLab.id);
+    setPreferredLabId(nextLab.id);
     setError(null);
     if (!room.trim() || (previousLab && room.trim() === previousLab.name)) {
       setRoom(nextLab.name);
@@ -130,7 +132,7 @@ function SessionFormContent({
       return;
     }
 
-    const selectedLab = labs.find((l) => l.id === selectedLabId);
+    const selectedLab = labs.find((lab) => lab.id === selectedLabId);
     if (!selectedLab) {
       setError('Pilih laboratorium pelaksanaan praktikum terlebih dahulu.');
       return;
@@ -200,7 +202,7 @@ function SessionFormContent({
 
           {!initialData ? (
             <View style={styles.field}>
-              <Text style={styles.label}>Pilih Kelas</Text>
+              <Text style={styles.label}>Pilih Kelas untuk Sesi</Text>
               {classes.length === 0 ? (
                 <Text style={styles.noClassesWarning}>
                   Belum ada kelas. Buat kelas terlebih dahulu.
@@ -212,7 +214,10 @@ function SessionFormContent({
                     return (
                       <Pressable
                         key={c.id}
+                        testID={`session-class-option-${c.id}`}
                         onPress={() => setSelectedClassId(c.id)}
+                        accessibilityRole="button"
+                        accessibilityState={{ selected }}
                         style={[styles.chip, selected && styles.chipSelected]}>
                         <Text style={[styles.chipText, selected && styles.chipTextSelected]}>
                           {c.name} — {c.practicalName}
@@ -224,6 +229,38 @@ function SessionFormContent({
               )}
             </View>
           ) : null}
+
+          <View style={styles.field}>
+            <Text style={styles.label}>Pilih Laboratorium (Wajib untuk Presensi Lokasi)</Text>
+            <Text style={styles.fieldHint}>
+              Lokasi dan radius diambil dari dokumen laboratorium di Firestore.
+            </Text>
+            {labs.length === 0 ? (
+              <Text style={styles.noClassesWarning}>
+                Belum ada laboratorium. Tambahkan laboratorium di tab Lab terlebih dahulu.
+              </Text>
+            ) : (
+              <View style={styles.chipRow}>
+                {labs.map((lab) => {
+                  const selected = lab.id === selectedLabId;
+                  return (
+                    <Pressable
+                      key={lab.id}
+                      testID={`session-lab-option-${lab.id}`}
+                      onPress={() => handleSelectLab(lab)}
+                      accessibilityRole="button"
+                      accessibilityState={{ selected }}
+                      style={[styles.chip, selected && styles.chipSelected]}>
+                      <Text style={[styles.chipText, selected && styles.chipTextSelected]}>
+                        {lab.name}
+                        {lab.building ? ` (${lab.building})` : ''} • {lab.radiusMeters} m
+                      </Text>
+                    </Pressable>
+                  );
+                })}
+              </View>
+            )}
+          </View>
 
           <View style={styles.field}>
             <Text style={styles.label}>Tanggal (YYYY-MM-DD)</Text>
@@ -284,32 +321,6 @@ function SessionFormContent({
           </View>
 
           <View style={styles.field}>
-            <Text style={styles.label}>Pilih Laboratorium (Wajib untuk Presensi Lokasi)</Text>
-            {labs.length === 0 ? (
-              <Text style={styles.noClassesWarning}>
-                Belum ada laboratorium. Tambahkan laboratorium di tab Lab terlebih dahulu.
-              </Text>
-            ) : (
-              <View style={styles.chipRow}>
-                {labs.map((lab) => {
-                  const selected = lab.id === selectedLabId;
-                  return (
-                    <Pressable
-                      key={lab.id}
-                      onPress={() => handleSelectLab(lab)}
-                      style={[styles.chip, selected && styles.chipSelected]}>
-                      <Text style={[styles.chipText, selected && styles.chipTextSelected]}>
-                        {lab.name}
-                        {lab.building ? ` (${lab.building})` : ''} • {lab.radiusMeters} m
-                      </Text>
-                    </Pressable>
-                  );
-                })}
-              </View>
-            )}
-          </View>
-
-          <View style={styles.field}>
             <Text style={styles.label}>Keterangan Ruangan (Opsional)</Text>
             <TextInput
               value={room}
@@ -344,7 +355,12 @@ function SessionFormContent({
             <AppButton
               title={submitting ? 'Menyimpan...' : 'Simpan Sesi'}
               onPress={() => void handleSubmit()}
-              disabled={submitting || (!initialData && classes.length === 0) || labs.length === 0}
+              disabled={
+                submitting ||
+                labs.length === 0 ||
+                !selectedLabId ||
+                (!initialData && classes.length === 0)
+              }
               style={styles.submitButton}
             />
           </View>
@@ -397,6 +413,11 @@ const styles = StyleSheet.create({
     color: AppColors.warning,
     fontSize: 13,
     fontStyle: 'italic',
+  },
+  fieldHint: {
+    color: AppColors.textMuted,
+    fontSize: 12,
+    lineHeight: 17,
   },
   field: {
     gap: 6,

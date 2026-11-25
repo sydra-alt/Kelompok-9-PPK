@@ -1,34 +1,32 @@
 # Panduan Setup Sprint 3 — Maps, Izin Perangkat, FCM & Security Rules
 
-Dokumen ini melengkapi kebutuhan konfigurasi Sprint 3 untuk menjalankan Peta Laboratorium (`react-native-maps`), validasi lokasi presensi (`expo-location`), pengiriman & penerimaan Push Notification (`expo-notifications` + FCM), serta penerapan Security Rules pada project Firebase.
+Dokumen ini melengkapi kebutuhan konfigurasi Sprint 3 untuk menjalankan Peta Laboratorium (`react-native-webview` / Google Maps JavaScript API), validasi lokasi presensi (`expo-location`), pengiriman & penerimaan Push Notification (`expo-notifications` + FCM), serta penerapan Security Rules pada project Firebase.
 
 ---
 
-## 1. Konfigurasi Layanan Google Maps Android
+## 1. Konfigurasi Layanan Google Maps
 
-Konfigurasi Maps dibaca secara dinamis oleh [`app.config.js`](../app.config.js) melalui variabel environment `GOOGLE_MAPS_API_KEY`.
+Konfigurasi Maps dibaca secara dinamis oleh [`app.config.js`](../app.config.js) melalui variabel environment `GOOGLE_MAPS_API_KEY` dan disuntikkan ke `extra.googleMapsApiKey` untuk dipakai Google Maps JavaScript API pada layar Peta Laboratorium (`WebView`).
 
 1. Buka [Google Cloud Console](https://console.cloud.google.com/) pada project Google Cloud yang sama dengan Firebase project kelompok.
-2. Aktifkan **Maps SDK for Android** (dan **Maps SDK for iOS** jika menguji di iOS dengan Google provider).
-3. Buat **API Key** baru di menu **APIs & Services -> Credentials**, lalu batasi penggunaannya:
-   - **Application restriction:** Android apps — isi package name `com.sirielfahri.ppkrnexpo58` (sesuai `android.package` di [`app.json`](../app.json)) beserta SHA-1 keystore debug/EAS.
-   - **API restriction:** Batasi ke **Maps SDK for Android**.
+2. Aktifkan **Maps JavaScript API** (dan **Maps SDK for Android/iOS** bila suatu saat beralih ke native map view).
+3. Buat **API Key** baru di menu **APIs & Services -> Credentials**, lalu batasi penggunaannya (API restriction ke **Maps JavaScript API**).
 4. Simpan key di file `.env.local` (file ini di-ignore oleh git):
    ```dotenv
    GOOGLE_MAPS_API_KEY=AIzaSy...key-anda...
    ```
-5. Tanpa `GOOGLE_MAPS_API_KEY` yang valid pada `.env.local` atau EAS Secret/Environment Variables, [`app.config.js`](../app.config.js) akan menolak menjalankan konfigurasi native agar build tidak menghasilkan peta kosong.
+5. Tanpa `GOOGLE_MAPS_API_KEY` yang valid pada `.env.local` atau EAS Secret/Environment Variables, [`app.config.js`](../app.config.js) akan menolak menjalankan konfigurasi Expo agar build tidak menghasilkan peta kosong.
 
 ---
 
 ## 2. Izin Lokasi, Notifikasi & Development Build (`expo-dev-client`)
 
-Fitur Sprint 3 memakai modul native (`react-native-maps`, `expo-location`, `expo-notifications`) yang **membutuhkan Development Build** (remote push Android serta Maps API Key tidak didukung penuh pada Expo Go standar).
+Fitur Sprint 3 memakai modul native (`expo-location`, `expo-notifications`, `react-native-webview`) yang **membutuhkan Development Build** (remote push Android tidak didukung penuh pada Expo Go standar).
 
 ### Plugin yang sudah dikonfigurasi di `app.json` & `app.config.js`
 - **`expo-location`** (di [`app.json`](../app.json)): menyertakan `locationWhenInUsePermission` (`ACCESS_FINE_LOCATION` / `ACCESS_COARSE_LOCATION` di Android dan `NSLocationWhenInUseUsageDescription` di iOS).
 - **`expo-notifications`** (di [`app.json`](../app.json)): mendaftarkan izin `POST_NOTIFICATIONS` pada Android 13+ dan handler remote notification native.
-- **`react-native-maps`** (di [`app.config.js`](../app.config.js)): menyuntikkan `androidGoogleMapsApiKey` ke `AndroidManifest.xml` saat Continuous Native Generation (`prebuild` / `eas build`).
+- **`extra.googleMapsApiKey`** (di [`app.config.js`](../app.config.js)): meneruskan `GOOGLE_MAPS_API_KEY` ke runtime aplikasi untuk Maps JavaScript API di WebView.
 
 > **Aturan CNG:** Jangan membuat atau menyunting folder `android/` atau `ios/` secara manual. Seluruh perubahan konfigurasi native diatur lewat `app.json` dan `app.config.js`.
 

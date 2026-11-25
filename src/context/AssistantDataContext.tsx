@@ -141,7 +141,7 @@ export function AssistantDataProvider({ children }: PropsWithChildren) {
   const [attendanceSnap, setAttendanceSnap] = useState<KeyedData<AttendanceRecord[]> | null>(null);
   const [permissionsSnap, setPermissionsSnap] = useState<KeyedData<PermissionRequest[]> | null>(null);
 
-  // 1. Berlangganan kelas yang diampu asisten (jika belum ada, coba subscribe all classes)
+  // 1. Gabungkan kelas milik asisten dengan kelas legacy yang belum memiliki assistantIds.
   useEffect(() => {
     if (!assistantUid || !assistantScopeKey) return undefined;
 
@@ -152,37 +152,37 @@ export function AssistantDataProvider({ children }: PropsWithChildren) {
       });
     };
 
-    // Coba dengarkan kelas asisten; jika kosong atau asisten mengampu kelas
-    let unsubAll: (() => void) | null = null;
-    const unsubClasses = subscribeAssistantClasses(
+    let assignedClasses: PracticeClass[] = [];
+    let legacyClasses: PracticeClass[] = [];
+
+    const publishClasses = (fromCache: boolean) => {
+      const classesById = new Map<string, PracticeClass>();
+      for (const item of legacyClasses) classesById.set(item.id, item);
+      for (const item of assignedClasses) classesById.set(item.id, item);
+      const data = [...classesById.values()].sort((a, b) => a.name.localeCompare(b.name));
+      setClassesSnap({ key: assistantScopeKey, data, fromCache });
+    };
+
+    const unsubAll = subscribeAllClasses(
+      (data, meta) => {
+        // Pertahankan dokumen lama tanpa assistantIds saat kelas baru dibuat.
+        legacyClasses = data.filter((item) => item.assistantIds.length === 0);
+        publishClasses(meta.fromCache);
+      },
+      handleError,
+    );
+    const unsubAssigned = subscribeAssistantClasses(
       assistantUid,
       (data, meta) => {
-        if (data.length === 0) {
-          // Jika tidak ada kelas dengan assistantIds, dengarkan seluruh kelas
-          if (!unsubAll) {
-            unsubAll = subscribeAllClasses(
-              (allData, allMeta) => {
-                setClassesSnap({ key: assistantScopeKey, data: allData, fromCache: allMeta.fromCache });
-              },
-              () => {
-                setClassesSnap({ key: assistantScopeKey, data: [], fromCache: meta.fromCache });
-              },
-            );
-          }
-        } else {
-          if (unsubAll) {
-            unsubAll();
-            unsubAll = null;
-          }
-          setClassesSnap({ key: assistantScopeKey, data, fromCache: meta.fromCache });
-        }
+        assignedClasses = data;
+        publishClasses(meta.fromCache);
       },
       handleError,
     );
 
     return () => {
-      unsubClasses();
-      if (unsubAll) unsubAll();
+      unsubAll();
+      unsubAssigned();
     };
   }, [assistantUid, assistantScopeKey]);
 

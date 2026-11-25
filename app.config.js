@@ -26,14 +26,11 @@ module.exports = ({ config }) => {
 
   return {
     ...config,
-    plugins: [
-      ...(config.plugins ?? []),
-      [
-        'react-native-maps',
-        {
-          androidGoogleMapsApiKey: mapsApiKey,
-        },
-      ],
-    ],
+    // The Demo Key is used by the Maps JavaScript API inside WebView, not by
+    // the native Google Maps SDK configured through react-native-maps.
+    extra: {
+      ...(config.extra ?? {}),
+      googleMapsApiKey: mapsApiKey,
+    },
   };
 };
