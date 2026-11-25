@@ -116,13 +116,13 @@ Sprint 3 menambahkan validasi lokasi fisik pada presensi, peta interaktif labora
 
 ## Pembagian SRS/Fitur — Sprint 4
 
-Sprint 4 menyempurnakan manajemen laboratorium dengan peran baru **Aslab** (*Asisten Laboratorium*), memfokuskan peran **Asprak** (*Asisten Praktikum*), menambahkan sistem perhitungan keterlambatan (*grace period*) dan denda tetap, mengintegrasikan pembayaran denda menggunakan **Midtrans (Sandbox)** melalui alur **client–server–payment gateway**, menghubungkan notifikasi tagihan & pembayaran, serta memfinalisasi antarmuka yang modern, konsisten, dan berjalan stabil pada **iOS dan Android**.
+Sprint 4 menambahkan peran baru **Aslab** (*Asisten Laboratorium*) dengan kewenangan di atas **Asisten** (*role `asisten` yang sudah digunakan aplikasi dan tetap dipertahankan*), menambahkan sistem perhitungan keterlambatan (*grace period*) dan denda tetap, mengintegrasikan pembayaran denda menggunakan **Midtrans (Sandbox)** melalui alur **client–server–payment gateway**, menghubungkan notifikasi tagihan & pembayaran, serta memfinalisasi antarmuka yang modern, konsisten, dan berjalan stabil pada **iOS dan Android**.
 
 ### Programmer 1 — Navigasi 3 Peran, Keterlambatan & Denda Praktikan, Pembayaran Midtrans Client, Riwayat & Notifikasi, serta Finalisasi UI Praktikan (iOS & Android)
 
-- **Autentikasi & Navigasi 3 Peran (`praktikan`, `asprak`, `aslab`):**
-  - Memperbarui pemetaan peran pengguna pada [`AppNavigator`](src/navigation/AppNavigator.tsx) dengan `Stack.Protected` untuk rute `/student/*`, `/asprak/*` (kompatibel dengan peran transisi `asisten` bila ada migrasi data), dan `/aslab/*`.
-  - Registrasi mandiri dari aplikasi tetap dikunci ke peran `praktikan`; penetapan `asprak` atau `aslab` tetap dikontrol di server/Console/admin atau melalui alur manajemen berwenang yang dilindungi Security Rules.
+- **Autentikasi & Navigasi 3 Peran (`praktikan`, `asisten`, `aslab`):**
+  - Memperbarui pemetaan peran pengguna pada [`AppNavigator`](src/navigation/AppNavigator.tsx) dengan `Stack.Protected` untuk rute `/student/*`, `/assistant/*`, dan `/aslab/*`. Nilai role Firestore `asisten` tetap dipakai; tidak dimigrasikan atau diganti menjadi `asprak`.
+  - Registrasi mandiri dari aplikasi tetap dikunci ke peran `praktikan`; penetapan `asisten` atau `aslab` tetap dikontrol di server/Console/admin atau melalui alur manajemen berwenang yang dilindungi Security Rules.
 - **Perhitungan Keterlambatan (*Grace Period*) & Pencatatan Denda:**
   - Memperbarui alur presensi ([`attendance-service.ts`](src/services/attendance-service.ts)) agar membandingkan waktu presensi dengan `startTime` sesi serta konfigurasi toleransi (`gracePeriodMinutes`) milik laboratorium/sesi terkait: presensi sebelum atau tepat pada akhir masa toleransi dicatat sebagai `on_time`; setelah melewati batas dicatat sebagai `late`.
   - Saat tercatat `late`, buat maksimal **satu tagihan denda** dengan ID deterministik (`fines/{sessionId}_{studentId}`) berisi nominal tetap sesuai kebijakan, terhubung ke `studentId`, `sessionId`, dan `attendanceId`.
@@ -139,19 +139,19 @@ Sprint 4 menyempurnakan manajemen laboratorium dengan peran baru **Aslab** (*Asi
 - **Finalisasi Antarmuka Praktikan (iOS & Android):**
   - Menyeragamkan desain kartu, badge status, empty/loading/error state, `SafeAreaView` (notch & home indicator iOS, edge-to-edge Android), serta `KeyboardAvoidingView` pada seluruh layar praktikan.
 
-### Programmer 2 — Manajemen Lab & 3 Bulk Insert (Aslab), Dashboard Keberlangsungan Lab, Ruang Lingkup Asprak, Backend Midtrans + Webhook, Security Rules & Konfigurasi Build iOS/Android
+### Programmer 2 — Manajemen Lab & 3 Bulk Insert (Aslab), Dashboard Keberlangsungan Lab, Ruang Lingkup Asisten, Backend Midtrans + Webhook, Security Rules & Konfigurasi Build iOS/Android
 
 - **Ekstensi Skema Firestore & Kontrak Backend Sprint 4:**
-  - Menyepakati bersama Programmer 1 penambahan role `aslab` dan `asprak` di `users/{uid}`, kebijakan laboratorium (`courseName`, `gracePeriodMinutes`, `lateFineAmount`, `attendanceCoverage` / `radiusMeters`) di `labs/{labId}`, keanggotaan asprak/aslab pada lab, status keterlambatan (`on_time` | `late` | `excused_absence`) pada `attendance`, serta koleksi baru `fines` dan `paymentTransactions`.
+  - Menyepakati bersama Programmer 1 penambahan role `aslab` di samping role lama `asisten` pada `users/{uid}`, kebijakan laboratorium (`courseName`, `gracePeriodMinutes`, `lateFineAmount`, `attendanceCoverage` / `radiusMeters`) di `labs/{labId}`, keanggotaan asisten/aslab pada lab, status keterlambatan (`on_time` | `late` | `excused_absence`) pada `attendance`, serta koleksi baru `fines` dan `paymentTransactions`.
 - **Manajemen Laboratorium oleh Aslab (Role Baru):**
   - CRUD data laboratorium: nama, mata kuliah, lokasi/gedung, koordinat `latitude`/`longitude`, cakupan lokasi & radius validasi presensi, serta pengaturan batas toleransi keterlambatan (*grace period*) dan nominal denda tetap.
   - **Tiga fitur bulk / single insert terpisah** (bukan satu bulk gabungan untuk ketiganya):
     1. **Bulk / single insert Laboratorium** sekaligus berdasarkan satu mata kuliah.
     2. **Bulk / single insert data Praktikan** ke laboratorium tertentu.
-    3. **Bulk / single insert data Asprak** ke laboratorium tertentu.
+    3. **Bulk / single insert data Asisten** ke laboratorium tertentu.
   - **Downloadable Template File:** menyediakan tombol unduh/ekspor file template CSV/XLSX untuk masing-masing dari ketiga jenis bulk insert menggunakan `expo-file-system` + `expo-sharing` agar berfungsi di **iOS** (Share Sheet / Files) dan **Android** (Save/Share).
   - **Staging Review List Interaktif (`ScrollView`):** setiap baris hasil impor bulk tampil sebagai daftar yang dapat ditinjau ulang sebelum disimpan — Aslab dapat melakukan *accept / deny* per baris, menyunting nilai, serta melengkapi data yang masih kosong sebelum commit batch ke Firestore.
-  - **Perpindahan Antar-Laboratorium:** memindahkan praktikan dan asprak/aslab dari satu laboratorium ke laboratorium lainnya **tanpa memindahkan jadwal praktikum**.
+  - **Perpindahan Antar-Laboratorium:** memindahkan praktikan dan asisten/aslab dari satu laboratorium ke laboratorium lainnya **tanpa memindahkan jadwal praktikum**.
 - **Dashboard Keberlangsungan Laboratorium (Aslab):**
   - Menampilkan ringkasan & pemantauan berbasis data real-time Firebase dengan filter **Hari / Minggu / Bulan**:
     - Jumlah total laboratorium dan praktikan terdaftar.
@@ -160,21 +160,21 @@ Sprint 4 menyempurnakan manajemen laboratorium dengan peran baru **Aslab** (*Asi
     - Jadwal praktikum yang sedang berlangsung (`open`) dan yang akan datang (`scheduled`).
     - Riwayat kegiatan laboratorium.
     - **Riwayat keuangan hasil denda praktikum** (total terbayar, tertunda, gagal, serta rincian transaksi per sesi/periode).
-- **Pembatasan & Pengelolaan Sesi oleh Asprak:**
-  - Memfokuskan antarmuka & kewenangan Asprak pada kelas/laboratorium yang menjadi tanggung jawabnya: melihat kelas/jadwal/sesi yang diampu, membuka sesi, memantau & mengelola presensi praktikan (termasuk status tepat waktu/terlambat), memutus pengajuan izin (`approved` -> `excused_absence` bebas denda), dan menutup sesi.
-  - Perubahan status sesi tetap tersinkronisasi secara real-time ke aplikasi praktikan; Asprak tidak dapat mengubah konfigurasi global seluruh lab maupun memindahkan praktikan lintas laboratorium.
+- **Pembatasan & Pengelolaan Sesi oleh Asisten:**
+  - Memfokuskan antarmuka & kewenangan Asisten pada kelas/laboratorium yang menjadi tanggung jawabnya: melihat kelas/jadwal/sesi yang diampu, membuka sesi, memantau & mengelola presensi praktikan (termasuk status tepat waktu/terlambat), memutus pengajuan izin (`approved` -> `excused_absence` bebas denda), dan menutup sesi.
+  - Perubahan status sesi tetap tersinkronisasi secara real-time ke aplikasi praktikan; Asisten tidak dapat mengubah konfigurasi global seluruh lab maupun memindahkan praktikan lintas laboratorium. Aslab berada pada tingkat kewenangan yang lebih tinggi dan mengelola konfigurasi lab.
 - **Backend Payment Service (Midtrans Sandbox) & Webhook:**
   - Membangun service backend (Firebase Cloud Functions v2 atau Node.js/Express/Cloud Run) menggunakan `MIDTRANS_SERVER_KEY` (Sandbox) dan Firebase Admin SDK:
     - `POST /api/payments/create`: memverifikasi Firebase Auth ID Token pengaju, memvalidasi kepemilikan & status tagihan di `fines`, membuat transaksi ke Midtrans Snap Sandbox API, menyimpan record awal `pending` di `paymentTransactions`, lalu mengembalikan `snapToken` & `redirectUrl`.
     - `POST /api/payments/webhook`: memverifikasi `signature_key` SHA-512 dari Midtrans, memetakan status Midtrans (`settlement`/`capture` → `success`; `pending` → `pending`; `deny`/`cancel`/`expire`/`failure` → `failed`), memperbarui `paymentTransactions` dan `fines` secara transaksional, serta memicu push notification (`payment_success` / `payment_failed`).
   - Memicu push notification `fine_created` saat tagihan denda baru dibuat (melalui backend/trigger atau service terintegrasi) dengan penanganan kegagalan yang tidak merusak data utama Firestore.
 - **Pembaruan Firebase Security Rules (`firestore.rules`):**
-  - Memperbarui aturan akses untuk 3 peran (`praktikan`, `asprak`, `aslab`):
-    - Hanya `aslab` yang dapat membuat/mengelola laboratorium global, kebijakan toleransi/denda, bulk insert, dan memindahkan praktikan/asprak antar-lab.
-    - `asprak` hanya boleh mengelola sesi, presensi, dan keputusan izin pada kelas/lab yang menjadi tanggung jawabnya.
+  - Memperbarui aturan akses untuk 3 peran (`praktikan`, `asisten`, `aslab`):
+    - Hanya `aslab` yang dapat membuat/mengelola laboratorium global, kebijakan toleransi/denda, bulk insert, dan memindahkan praktikan/asisten antar-lab.
+    - `asisten` hanya boleh mengelola sesi, presensi, dan keputusan izin pada kelas/lab yang menjadi tanggung jawabnya.
     - `praktikan` hanya dapat membaca `fines` & `paymentTransactions` miliknya sendiri dan **dilarang keras** mengubah status pembayaran menjadi `success`/`failed` dari client (penulisan status terverifikasi hanya via backend/Admin SDK).
-- **Finalisasi Antarmuka Aslab/Asprak & Konfigurasi Build iOS + Android:**
-  - Menyeragamkan desain UI modern & konsisten di seluruh layar Aslab dan Asprak (responsif di iOS & Android) serta melengkapi konfigurasi `ios.bundleIdentifier`, izin `Info.plist`, APNs, FCM, dan panduan build lintas platform.
+- **Finalisasi Antarmuka Aslab/Asisten & Konfigurasi Build iOS + Android:**
+  - Menyeragamkan desain UI modern & konsisten di seluruh layar Aslab dan Asisten (responsif di iOS & Android) serta melengkapi konfigurasi `ios.bundleIdentifier`, izin `Info.plist`, APNs, FCM, dan panduan build lintas platform.
 
 ### Kontrak Integrasi Bersama (Sprint 4)
 
@@ -182,8 +182,8 @@ Sprint 4 menyempurnakan manajemen laboratorium dengan peran baru **Aslab** (*Asi
 
 | Koleksi | Field Kunci & Ekstensi Sprint 4 | Keterangan |
 | --- | --- | --- |
-| `users/{uid}` | `role`: `'praktikan' \| 'asprak' \| 'aslab'` *(atau migrasi dari `'asisten'`)* | Sumber peran tepercaya; tidak dapat diubah oleh pengguna sendiri. |
-| `labs/{labId}` | `courseName`, `building`, `latitude`, `longitude`, `radiusMeters`, `gracePeriodMinutes`, `lateFineAmount`, `asprakIds`, `aslabIds` | Konfigurasi lokasi & kebijakan keterlambatan/denda per lab. |
+| `users/{uid}` | `role`: `'praktikan' \| 'asisten' \| 'aslab'` | Sumber peran tepercaya; role `asisten` dipertahankan dan `aslab` merupakan role terpisah. |
+| `labs/{labId}` | `courseName`, `building`, `latitude`, `longitude`, `radiusMeters`, `gracePeriodMinutes`, `lateFineAmount`, `assistantIds`, `aslabIds` | Konfigurasi lokasi, kebijakan keterlambatan/denda, dan anggota per lab. |
 | `sessions/{sessionId}` | `labId`, `labName`, `gracePeriodMinutes` *(opsional override)*, `lateFineAmount` *(opsional override)* | Jadwal sesi yang tertaut ke laboratorium. |
 | `attendance/{sessionId}_{studentId}` | `attendanceStatus`: `'on_time' \| 'late' \| 'excused_absence'`, `lateMinutes`: `number`, `attendedAt`, `latitude`, `longitude`, `distanceMeters` | ID deterministik; status kehadiran tidak berubah akibat pembayaran denda. |
 | `fines/{sessionId}_{studentId}` | `studentId`, `studentName`, `studentIdentifier`, `sessionId`, `classId`, `labId`, `attendanceId`, `practicalName`, `sessionDate`, `amount`, `lateMinutes`, `status`: `'pending' \| 'paid'`, `latestTransactionId`, `createdAt`, `paidAt` | ID deterministik → satu kejadian keterlambatan hanya menghasilkan satu tagihan denda. |
@@ -266,16 +266,16 @@ npx eas-cli@latest build --profile preview --platform android
 
 ### Urutan Pengerjaan dan Kriteria Selesai (Sprint 4)
 
-1. **Fase 1 — Kontrak Data, 3 Peran & Backend Setup:** Sepakati skema Firestore Sprint 4 (`aslab`/`asprak`/`praktikan`, `labs`, `fines`, `paymentTransactions`), tambahkan `ios.bundleIdentifier` di `app.json`, dan siapkan kerangka backend Midtrans Sandbox + Webhook.
+1. **Fase 1 — Kontrak Data, 3 Peran & Backend Setup:** Sepakati skema Firestore Sprint 4 (`aslab`/`asisten`/`praktikan`, `labs`, `fines`, `paymentTransactions`), tambahkan `ios.bundleIdentifier` di `app.json`, dan siapkan kerangka backend Midtrans Sandbox + Webhook.
 2. **Fase 2 — Implementasi Paralel Inti:**
    - **Programmer 1:** update navigasi 3 peran, perhitungan *grace period* & pencatatan denda deterministik, halaman tagihan & checkout Midtrans client, halaman riwayat pembayaran, dan handler notifikasi baru.
-   - **Programmer 2:** CRUD lab + 3 alur bulk insert terpisah dengan downloadable template & `ScrollView` staging editor, perpindahan praktikan/asprak antar-lab, dashboard keberlangsungan lab Aslab (filter hari/minggu/bulan + riwayat keuangan denda), pembatasan ruang lingkup Asprak, serta endpoint backend Midtrans + Webhook & pembaruan `firestore.rules`.
+   - **Programmer 2:** CRUD lab + 3 alur bulk insert terpisah dengan downloadable template & `ScrollView` staging editor, perpindahan praktikan/asisten antar-lab, dashboard keberlangsungan lab Aslab (filter hari/minggu/bulan + riwayat keuangan denda), pembatasan ruang lingkup Asisten, serta endpoint backend Midtrans + Webhook & pembaruan `firestore.rules`.
 3. **Fase 3 — Integrasi Pembayaran, Notifikasi & Security Rules:** Hubungkan client ke backend Sandbox, uji callback/webhook dengan status `settlement`, `pending`, `expire`/`deny`, pastikan notifikasi diterima di iOS & Android, dan uji aturan akses lintas peran di `firestore.rules`.
 4. **Fase 4 — Finalisasi UI & Build Akhir iOS + Android:** Lakukan polesan UI konsisten di semua peran, jalankan `npx tsc --noEmit`, `npx expo lint`, `npx expo-doctor`, lalu hasilkan build akhir Android (`.apk`) & iOS (Simulator/Device) serta demonstrasikan seluruh skenario end-to-end.
 
 **Kriteria Selesai Sprint 4:**
-- Aslab dapat mengelola lab, menjalankan ketiga bulk/single insert secara terpisah dari template yang bisa diunduh, meninjau & mengedit baris di list `ScrollView`, memindahkan praktikan & asprak/aslab antar-lab (tanpa memindahkan jadwal), serta memantau dashboard keberlangsungan lab + riwayat keuangan denda dengan filter hari/minggu/bulan.
-- Asprak dapat membuka/menutup sesi dan memantau presensi sesuai kelas/lab tanggung jawabnya secara real-time tanpa akses konfigurasi global lab.
+- Aslab dapat mengelola lab, menjalankan ketiga bulk/single insert secara terpisah dari template yang bisa diunduh, meninjau & mengedit baris di list `ScrollView`, memindahkan praktikan & asisten/aslab antar-lab (tanpa memindahkan jadwal), serta memantau dashboard keberlangsungan lab + riwayat keuangan denda dengan filter hari/minggu/bulan.
+- Asisten dapat membuka/menutup sesi dan memantau presensi sesuai kelas/lab tanggung jawabnya secara real-time tanpa akses konfigurasi global lab; Aslab memiliki kewenangan pengelolaan lab di atas Asisten.
 - Presensi menghitung *grace period* dengan benar; keterlambatan menghasilkan tepat 1 tagihan denda tetap; izin disetujui menjadi `excused_absence` bebas denda; pembayaran denda tidak mengubah status kehadiran.
 - Pembayaran Midtrans Sandbox berjalan melalui backend + verifikasi webhook (tanpa secret key di client), status `pending`/`success`/`failed` tampil akurat, notifikasi tagihan & pembayaran diterima praktikan, dan riwayat pembayaran tetap persisten setelah aplikasi dibuka ulang di **iOS dan Android**.
 

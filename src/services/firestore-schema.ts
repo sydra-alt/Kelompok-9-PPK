@@ -48,7 +48,7 @@ export const permissionRequestId = (sessionId: string, studentId: string) => `${
 const SESSION_STATUSES: SessionStatus[] = ['scheduled', 'open', 'closed'];
 const PERMISSION_STATUSES: PermissionStatus[] = ['pending', 'approved', 'rejected'];
 const AI_STATUSES: AiClassificationStatus[] = ['pending', 'success', 'failed', 'skipped'];
-const ROLES: UserRole[] = ['praktikan', 'asisten'];
+const ROLES: UserRole[] = ['praktikan', 'asisten', 'aslab'];
 
 const str = (value: unknown, fallback = ''): string => (typeof value === 'string' ? value : fallback);
 const optStr = (value: unknown): string | undefined =>

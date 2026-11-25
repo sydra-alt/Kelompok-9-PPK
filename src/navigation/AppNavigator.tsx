@@ -10,7 +10,8 @@ import { useAuth } from '@/context/AuthContext';
  * autentikasi Firebase & peran tepercaya dari `users/{uid}`:
  * - Belum login / memulihkan sesi -> `/` (LoginScreen) & `/register`
  * - Peran `praktikan`             -> `/student/*`
- * - Peran `asisten`               -> `/assistant/*`
+ * - Peran `asisten`               -> `/assistant/*` (role lama dipertahankan)
+ * - Peran `aslab`                 -> `/aslab/*` (role terpisah dengan kewenangan lebih tinggi)
  */
 
 export const navigateTo = {
@@ -32,6 +33,7 @@ export const navigateTo = {
     router.push({ pathname: '/assistant/session/[sessionId]', params: { assistantId, sessionId } }),
   assistantRecap: (assistantId: string, sessionId?: string) =>
     router.push({ pathname: '/assistant/recap', params: { assistantId, sessionId } }),
+  aslabHome: () => router.push('/aslab/index'),
 };
 
 export default function AppNavigator() {
@@ -40,8 +42,16 @@ export default function AppNavigator() {
   const isAuthenticated = status === 'authenticated' && Boolean(role);
   const isStudent = isAuthenticated && role === 'praktikan';
   const isAssistant = isAuthenticated && role === 'asisten';
+  const isLabAssistant = isAuthenticated && role === 'aslab';
 
-  const homeRoute = role === 'praktikan' ? '/student' : role === 'asisten' ? '/assistant' : '/';
+  const homeRoute =
+    role === 'praktikan'
+      ? '/student'
+      : role === 'asisten'
+        ? '/assistant'
+        : role === 'aslab'
+          ? '/aslab/index'
+          : '/';
 
   return (
     <Stack
@@ -60,7 +70,9 @@ export default function AppNavigator() {
       </Stack.Protected>
 
       {/* Alur praktikan — Programmer 1 */}
-      <Stack.Protected guard={isStudent} redirectTo={isAssistant ? '/assistant' : '/'}>
+      <Stack.Protected
+        guard={isStudent}
+        redirectTo={isAssistant ? '/assistant' : isLabAssistant ? '/aslab/index' : '/'}>
         <Stack.Screen
           name="student/index"
           options={{ title: 'Beranda Praktikan', headerBackVisible: false }}
@@ -76,13 +88,25 @@ export default function AppNavigator() {
       </Stack.Protected>
 
       {/* Alur asisten — Programmer 2 */}
-      <Stack.Protected guard={isAssistant} redirectTo={isStudent ? '/student' : '/'}>
+      <Stack.Protected
+        guard={isAssistant}
+        redirectTo={isStudent ? '/student' : isLabAssistant ? '/aslab/index' : '/'}>
         <Stack.Screen
           name="assistant/index"
           options={{ title: 'Dashboard Asisten', headerBackVisible: false }}
         />
         <Stack.Screen name="assistant/session/[sessionId]" options={{ title: 'Kelola Sesi' }} />
         <Stack.Screen name="assistant/recap" options={{ title: 'Rekap Kehadiran' }} />
+      </Stack.Protected>
+
+      {/* Aslab adalah role tersendiri dan berada di atas asisten. */}
+      <Stack.Protected
+        guard={isLabAssistant}
+        redirectTo={isStudent ? '/student' : isAssistant ? '/assistant' : '/'}>
+        <Stack.Screen
+          name="aslab/index"
+          options={{ title: 'Dashboard Aslab', headerBackVisible: false }}
+        />
       </Stack.Protected>
     </Stack>
   );

@@ -13,14 +13,14 @@
 // ---------------------------------------------------------------------------
 
 /** Peran tepercaya yang tersimpan di `users/{uid}.role`. */
-export type UserRole = 'praktikan' | 'asisten';
+export type UserRole = 'praktikan' | 'asisten' | 'aslab';
 
 /** Profil pengguna di koleksi `users/{uid}` (ID dokumen = uid Firebase Auth). */
 export interface UserProfile {
   uid: string;
   name: string;
   email: string;
-  /** NIM untuk praktikan, ID asisten untuk asisten. */
+  /** NIM untuk praktikan; ID/NIP untuk asisten atau aslab. */
   identifier: string;
   role: UserRole;
   /** Format waktu lokal: YYYY-MM-DDTHH:mm:ss (null jika belum tersinkron). */
