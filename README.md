@@ -124,12 +124,16 @@ Sprint 4 menambahkan peran baru **Aslab** (*Asisten Laboratorium*) dengan kewena
   - Memperbarui pemetaan peran pengguna pada [`AppNavigator`](src/navigation/AppNavigator.tsx) dengan `Stack.Protected` untuk rute `/student/*`, `/assistant/*`, dan `/aslab/*`. Nilai role Firestore `asisten` tetap dipakai; tidak dimigrasikan atau diganti menjadi `asprak`.
   - Registrasi mandiri dari aplikasi tetap dikunci ke peran `praktikan`; penetapan `asisten` atau `aslab` tetap dikontrol di server/Console/admin atau melalui alur manajemen berwenang yang dilindungi Security Rules.
 - **Perhitungan Keterlambatan (*Grace Period*) & Pencatatan Denda:**
-  - Memperbarui alur presensi ([`attendance-service.ts`](src/services/attendance-service.ts)) agar membandingkan waktu presensi dengan `startTime` sesi serta konfigurasi toleransi (`gracePeriodMinutes`) milik laboratorium/sesi terkait: presensi sebelum atau tepat pada akhir masa toleransi dicatat sebagai `on_time`; setelah melewati batas dicatat sebagai `late`.
-  - Saat tercatat `late`, buat maksimal **satu tagihan denda** dengan ID deterministik (`fines/{sessionId}_{studentId}`) berisi nominal tetap sesuai kebijakan, terhubung ke `studentId`, `sessionId`, dan `attendanceId`.
-  - Memastikan praktikan dengan izin berstatus `approved` dicatat sebagai tidak hadir dengan izin (`excused_absence`), **tidak dikenakan denda**, dan keputusan izin **tidak pernah** mengubah catatan kehadiran menjadi hadir; pembayaran denda juga **tidak** mengubah status kehadiran praktikan.
+  - Alur presensi client ([`attendance-service.ts`](src/services/attendance-service.ts)) mengirim Firebase ID Token, ID sesi, latitude, dan longitude ke backend. Backend menggunakan waktu server, memvalidasi akun praktikan, keanggotaan kelas, sesi, lokasi terhadap lab, dan ID presensi deterministik, kemudian menulis dokumen attendance.
+  - Waktu sesi ditafsirkan pada zona `Asia/Jakarta` (WIB). Toleransi default 15 menit; `sessions/{sessionId}.gracePeriodMinutes` meng-override `labs/{labId}.gracePeriodMinutes`, dan `sessions/{sessionId}.lateFineAmount` meng-override `labs/{labId}.lateFineAmount`. Jika override tidak diisi, gunakan nilai lab. Tepat 15 menit setelah waktu mulai masih `on_time`; lewat dari itu `late`.
+  - `lateMinutes` untuk presensi `late` adalah jumlah menit sejak waktu mulai sesi, dibulatkan ke atas: `ceil((waktu_presensi - waktu_mulai)/60 detik)`. Untuk status `on_time` dan `excused_absence`, nilainya `0`. Contoh: sesi mulai 09:00, presensi tepat 09:15 = `on_time`; presensi 09:15:01 = `late`, `lateMinutes: 16`.
+  - Selama status sesi masih `open`, praktikan dapat presensi terlambat sampai waktu penutupan aktual. Endpoint penutupan backend menetapkan `status: closed` dan `closedAt` memakai waktu server. Permintaan yang diterima server sebelum atau tepat `closedAt` boleh diselesaikan; permintaan yang diterima sesudahnya ditolak. Penutupan dan presensi harus direkonsiliasi secara idempoten.
+  - Backend menulis status attendance (`on_time`/`late`) dan, untuk keterlambatan, membuat maksimal satu denda tetap deterministik (`fines/{sessionId}_{studentId}`). Kegagalan kirim notifikasi tidak membatalkan penulisan utama. Client tidak menulis status `late`, nominal/status denda, atau status pembayaran.
+  - Sesudah sesi ditutup, backend memeriksa roster dan pengajuan izin. Anggota kelas tanpa attendance yang memiliki izin `approved` mendapat dokumen `excused_absence` tanpa denda (`attendedAt`, koordinat, dan `distanceMeters` bernilai `null`; `lateMinutes: 0`). Untuk yang tidak hadir tanpa izin, tidak dibuat dokumen attendance karena himpunan status final belum memiliki `absent`; rekap menampilkan mereka dengan membandingkan roster dan attendance setelah sesi ditutup.
+  - Keputusan izin tidak mengubah presensi yang sudah tercatat menjadi hadir; pembayaran denda juga tidak mengubah status kehadiran.
 - **Pembayaran Denda Midtrans Sandbox (Sisi Client iOS & Android):**
   - Menyediakan layar daftar tagihan & rincian nominal denda milik praktikan (total tunggakan, detail sesi, keterlambatan dalam menit, dan status `pending` / `paid`).
-  - Memanggil endpoint backend untuk membuat transaksi Snap Midtrans (tidak pernah menyimpan `Server Key` di aplikasi React Native).
+  - Memanggil `POST /api/payments/create` dengan Firebase ID Token dan `{ "fineId": "..." }` untuk membuat transaksi Snap Midtrans. Backend memverifikasi pemilik dan status denda serta mengambil nominal dari Firestore (tidak pernah menyimpan `Server Key` atau secret verifikasi di aplikasi React Native). Response sukses berisi `orderId`, `snapToken`, dan `redirectUrl`.
   - Mengarahkan praktikan ke halaman pembayaran Midtrans Snap menggunakan `react-native-webview` atau `expo-web-browser` agar berjalan mulus di **iOS dan Android**.
   - Membaca status pembayaran akhir (`pending`, `success`, `failed`) dan status tagihan secara real-time dari Firestore setelah diverifikasi oleh webhook backend — tidak menentukan status lunas hanya dari respons redirect sisi client.
 - **Riwayat Pembayaran & Transaksi:**
@@ -139,10 +143,10 @@ Sprint 4 menambahkan peran baru **Aslab** (*Asisten Laboratorium*) dengan kewena
 - **Finalisasi Antarmuka Praktikan (iOS & Android):**
   - Menyeragamkan desain kartu, badge status, empty/loading/error state, `SafeAreaView` (notch & home indicator iOS, edge-to-edge Android), serta `KeyboardAvoidingView` pada seluruh layar praktikan.
 
-### Programmer 2 — Manajemen Lab & 3 Bulk Insert (Aslab), Dashboard Keberlangsungan Lab, Ruang Lingkup Asisten, Backend Midtrans + Webhook, Security Rules & Konfigurasi Build iOS/Android
+### Programmer 2 — Manajemen Lab & 3 Bulk Insert (Aslab), Dashboard Keberlangsungan Lab, Ruang Lingkup Asisten, Backend Presensi + Midtrans/Webhook, Security Rules & Konfigurasi Build iOS/Android
 
 - **Ekstensi Skema Firestore & Kontrak Backend Sprint 4:**
-  - Menyepakati bersama Programmer 1 penambahan role `aslab` di samping role lama `asisten` pada `users/{uid}`, kebijakan laboratorium (`courseName`, `gracePeriodMinutes`, `lateFineAmount`, `attendanceCoverage` / `radiusMeters`) di `labs/{labId}`, keanggotaan asisten/aslab pada lab, status keterlambatan (`on_time` | `late` | `excused_absence`) pada `attendance`, serta koleksi baru `fines` dan `paymentTransactions`.
+  - Mengimplementasikan kontrak Sprint 4 yang ditetapkan bersama Programmer 1: role `aslab` di samping role lama `asisten`, kebijakan lab/sesi dan override, koleksi `fines`/`paymentTransactions`, endpoint presensi dan penutupan sesi, serta aturan akses terkait.
 - **Manajemen Laboratorium oleh Aslab (Role Baru):**
   - CRUD data laboratorium: nama, mata kuliah, lokasi/gedung, koordinat `latitude`/`longitude`, cakupan lokasi & radius validasi presensi, serta pengaturan batas toleransi keterlambatan (*grace period*) dan nominal denda tetap.
   - **Tiga fitur bulk / single insert terpisah** (bukan satu bulk gabungan untuk ketiganya):
@@ -163,11 +167,13 @@ Sprint 4 menambahkan peran baru **Aslab** (*Asisten Laboratorium*) dengan kewena
 - **Pembatasan & Pengelolaan Sesi oleh Asisten:**
   - Memfokuskan antarmuka & kewenangan Asisten pada kelas/laboratorium yang menjadi tanggung jawabnya: melihat kelas/jadwal/sesi yang diampu, membuka sesi, memantau & mengelola presensi praktikan (termasuk status tepat waktu/terlambat), memutus pengajuan izin (`approved` -> `excused_absence` bebas denda), dan menutup sesi.
   - Perubahan status sesi tetap tersinkronisasi secara real-time ke aplikasi praktikan; Asisten tidak dapat mengubah konfigurasi global seluruh lab maupun memindahkan praktikan lintas laboratorium. Aslab berada pada tingkat kewenangan yang lebih tinggi dan mengelola konfigurasi lab.
-- **Backend Payment Service (Midtrans Sandbox) & Webhook:**
-  - Membangun service backend (Firebase Cloud Functions v2 atau Node.js/Express/Cloud Run) menggunakan `MIDTRANS_SERVER_KEY` (Sandbox) dan Firebase Admin SDK:
-    - `POST /api/payments/create`: memverifikasi Firebase Auth ID Token pengaju, memvalidasi kepemilikan & status tagihan di `fines`, membuat transaksi ke Midtrans Snap Sandbox API, menyimpan record awal `pending` di `paymentTransactions`, lalu mengembalikan `snapToken` & `redirectUrl`.
-    - `POST /api/payments/webhook`: memverifikasi `signature_key` SHA-512 dari Midtrans, memetakan status Midtrans (`settlement`/`capture` → `success`; `pending` → `pending`; `deny`/`cancel`/`expire`/`failure` → `failed`), memperbarui `paymentTransactions` dan `fines` secara transaksional, serta memicu push notification (`payment_success` / `payment_failed`).
-  - Memicu push notification `fine_created` saat tagihan denda baru dibuat (melalui backend/trigger atau service terintegrasi) dengan penanganan kegagalan yang tidak merusak data utama Firestore.
+- **Backend Attendance & Payment Service (Midtrans Sandbox) serta Webhook:**
+  - Membangun service backend Node.js/Express, Cloud Run, atau platform lain yang disepakati, memakai Firebase Admin SDK. Kontrak endpoint client/server:
+    - `POST /api/attendance/submit`: Bearer Firebase ID Token; body `{ sessionId, latitude, longitude }`. Memvalidasi pemilik, membership, status/jam sesi, radius lab, waktu server, dan duplikasi; menulis `attendance/{sessionId}_{studentId}`. Response sukses berisi `attendanceId`, `attendanceStatus`, `attendedAt`, `lateMinutes`, `distanceMeters`, serta `fineId`/`fineAmount` bila terlambat. Kode error: `SESSION_CLOSED`, `NOT_CLASS_MEMBER`, `LOCATION_INVALID`, `OUTSIDE_RADIUS`, `ALREADY_ATTENDED`.
+    - `POST /api/sessions/{sessionId}/close`: Bearer Firebase ID Token asisten. Memvalidasi otorisasi kelas, menetapkan `status: closed` dan `closedAt` waktu server, lalu menjalankan finalisasi ketidakhadiran secara idempoten. Permintaan presensi dengan waktu penerimaan server `<= closedAt` dapat diselesaikan; permintaan sesudahnya ditolak.
+    - `POST /api/payments/create`: Bearer Firebase ID Token; body `{ fineId }`. Memvalidasi kepemilikan/status denda dan mengambil nominal dari Firestore, membuat transaksi Snap Sandbox, menyimpan transaksi `pending`, lalu mengembalikan `{ orderId, snapToken, redirectUrl }`. Checkout pending yang masih berlaku dipakai kembali atau ditolak; order baru dibuat hanya jika order sebelumnya tidak aktif.
+    - `POST /api/payments/webhook`: endpoint server-to-server Midtrans. Memverifikasi signature, memproses notifikasi secara idempoten, memetakan `settlement` atau `capture` yang lolos pemeriksaan fraud ke `success`, `pending` ke `pending`, serta `deny`/`cancel`/`expire`/`failure` ke `failed`. Transaksi `failed` tidak melunasi denda; denda menjadi `paid` hanya setelah sukses terverifikasi.
+  - Mengirim `fine_created` setelah dokumen denda berhasil dibuat, dan `payment_success`/`payment_failed` hanya setelah webhook terverifikasi serta Firestore berhasil diperbarui. Gagal mengirim push tidak membatalkan penulisan utama atau hasil pembayaran.
 - **Pembaruan Firebase Security Rules (`firestore.rules`):**
   - Memperbarui aturan akses untuk 3 peran (`praktikan`, `asisten`, `aslab`):
     - Hanya `aslab` yang dapat membuat/mengelola laboratorium global, kebijakan toleransi/denda, bulk insert, dan memindahkan praktikan/asisten antar-lab.
@@ -182,15 +188,18 @@ Sprint 4 menambahkan peran baru **Aslab** (*Asisten Laboratorium*) dengan kewena
 
 Keputusan berikut disepakati untuk implementasi Sprint 4 dan menjadi acuan bersama Programmer 1, Programmer 2, serta project manager:
 
-- **Zona waktu:** gunakan `Asia/Jakarta` (WIB) untuk menafsirkan tanggal dan jam sesi di Semarang. Simpan waktu kejadian sebagai timestamp Firestore; tampilkan dan bandingkan waktu sesi berdasarkan zona waktu tersebut.
-- **Masa toleransi:** nilai default `gracePeriodMinutes` adalah `15`. Nilai pada dokumen sesi, jika diisi, meng-override nilai kebijakan pada lab; jika tidak ada, gunakan nilai lab.
-- **Batas tepat waktu:** presensi sampai dengan dan termasuk 15 menit setelah waktu mulai terjadwal berstatus `on_time`. Presensi setelah batas tersebut berstatus `late`.
-- **Sesi masih terbuka:** praktikan masih dapat tercatat hadir terlambat setelah batas toleransi selama sesi berstatus `open` dan presensi dilakukan sebelum atau tepat waktu sesi ditutup. Setelah sesi `closed`, presensi baru ditolak.
-- **Ketidakhadiran:** backend baru mengevaluasi praktikan yang belum memiliki presensi setelah sesi ditutup. Izin yang sudah `approved` menghasilkan `excused_absence` dan tidak dikenai denda. Status untuk ketidakhadiran tanpa izin belum ditambahkan ke himpunan status yang disepakati.
-- **Otoritas backend:** backend adalah penulis tepercaya untuk status `late` dan dokumen denda. Untuk satu keterlambatan hanya boleh ada satu denda. Aplikasi tidak boleh membuat atau mengubah status denda/pembayaran secara langsung.
-- **Status presensi yang disepakati:** `on_time`, `late`, dan `excused_absence` (ejaan `pn_time` pada catatan awal dikoreksi menjadi `on_time`). Pembayaran denda tidak mengubah status presensi.
-- **Menit keterlambatan:** field `lateMinutes` tetap digunakan. Belum diputuskan apakah nilainya dihitung sejak waktu mulai sesi atau sejak akhir masa toleransi; Programmer 1, Programmer 2, dan project manager harus menyepakati definisi yang sama sebelum implementasi.
-- **Kontrak endpoint presensi backend:** belum ditentukan. Programmer 2 perlu menetapkan endpoint, autentikasi Firebase ID Token, payload (minimal ID sesi dan metadata lokasi), response, serta bentuk error sebelum client dihubungkan ke backend.
+- **Zona waktu:** gunakan `Asia/Jakarta` (WIB) untuk menafsirkan tanggal dan jam sesi di Semarang. Waktu kejadian disimpan sebagai timestamp Firestore dan ditampilkan pada zona ini.
+- **Masa toleransi:** default `gracePeriodMinutes` adalah `15`. Nilai sesi meng-override nilai lab jika terisi; jika tidak, gunakan kebijakan lab. Override `lateFineAmount` sesi juga meng-override nilai lab; nominal denda tetap (bukan kelipatan menit) dan disimpan sebagai bilangan bulat rupiah.
+- **Batas tepat waktu:** sampai dan termasuk tepat 15 menit sejak waktu mulai sesi = `on_time`; setelah batas = `late`. Contoh sesi pukul 09:00: 09:15:00 masih `on_time`, 09:15:01 sudah `late`.
+- **Definisi `lateMinutes`:** untuk `late`, bulatkan ke atas jumlah menit sejak jadwal mulai: `ceil((attendedAt - sessionStartAt) / 60 detik)`. Contoh 09:15:01 untuk sesi 09:00 menghasilkan `lateMinutes: 16`. Untuk `on_time` dan `excused_absence`, nilainya `0`.
+- **Waktu penerimaan presensi:** `attendedAt` merekam waktu server saat request presensi diterima. Selama sesi `open`, keterlambatan tetap dapat dicatat. Endpoint close menetapkan `closedAt` server; request yang diterima `<= closedAt` boleh diselesaikan, yang diterima setelahnya ditolak. Jika request presensi dan close bersamaan, backend merekonsiliasi dengan waktu penerimaan server dan ID presensi deterministik.
+- **Ketidakhadiran:** setelah close, backend membandingkan roster kelas, attendance, dan izin. Tanpa attendance + izin `approved` menghasilkan `excused_absence` tanpa denda; field `attendedAt`, koordinat, dan `distanceMeters` `null`, `lateMinutes: 0`. Absen tanpa izin tidak mendapat dokumen attendance karena kontrak status tidak memuat `absent`; rekap menyimpulkannya dari roster tanpa attendance setelah sesi closed.
+- **Otoritas:** backend menulis attendance `on_time`/`late`, `lateMinutes`, dan denda secara tepercaya serta idempoten. Client hanya mengirim permintaan presensi dan metadata lokasi; client tidak membuat denda atau mengubah status denda/pembayaran. Pembayaran tidak mengubah status presensi.
+- **Endpoint presensi:** `POST /api/attendance/submit`, Bearer Firebase ID Token, body `{ sessionId, latitude, longitude }`. Sukses mengembalikan ID/status/waktu attendance, `lateMinutes`, `distanceMeters`, serta `fineId`/`fineAmount` bila late. Error kontrak: `SESSION_CLOSED`, `NOT_CLASS_MEMBER`, `LOCATION_INVALID`, `OUTSIDE_RADIUS`. Jika dokumen attendance sudah ada, backend tidak membuat duplikat dan mengembalikan `ALREADY_ATTENDED` beserta ID/status dokumen yang sudah tercatat.
+- **Endpoint penutupan sesi:** `POST /api/sessions/{sessionId}/close`, Bearer Firebase ID Token asisten. Backend memeriksa kewenangan, menulis `status: closed` dan `closedAt`, lalu melakukan finalisasi excused absence secara idempoten.
+- **Checkout:** `POST /api/payments/create`, Bearer Firebase ID Token, body `{ fineId }`; response `{ orderId, snapToken, redirectUrl }`. Backend memeriksa pemilik dan status `pending`, membaca amount dari Firestore, dan memastikan retry tidak membuat checkout pending ganda.
+- **Status transaksi/denda:** webhook terverifikasi adalah satu-satunya sumber status final. `settlement`/`capture` yang lolos fraud => transaksi `success`, denda `paid`; `pending` => transaksi `pending`; `deny`/`cancel`/`expire`/`failure` => transaksi `failed`, denda tetap `pending` agar dapat dicoba lagi. Proses webhook idempoten.
+- **Pengirim push:** backend mengirim `fine_created` setelah denda tersimpan, serta `payment_success`/`payment_failed` setelah webhook diverifikasi dan Firestore diperbarui. Client hanya mendaftarkan token, menerima notifikasi, dan mengarahkan pengguna ke layar yang sesuai. Kegagalan push tidak membatalkan penulisan data utama.
 
 - **Koleksi & Field Tambahan Firestore:**
 
@@ -198,10 +207,10 @@ Keputusan berikut disepakati untuk implementasi Sprint 4 dan menjadi acuan bersa
 | --- | --- | --- |
 | `users/{uid}` | `role`: `'praktikan' \| 'asisten' \| 'aslab'` | Sumber peran tepercaya; role `asisten` dipertahankan dan `aslab` merupakan role terpisah. |
 | `labs/{labId}` | `courseName`, `building`, `latitude`, `longitude`, `radiusMeters`, `gracePeriodMinutes` (default `15`), `lateFineAmount`, `assistantIds`, `aslabIds` | Konfigurasi lokasi dan kebijakan dasar lab. Waktu sesi menggunakan `Asia/Jakarta`; kebijakan sesi dapat meng-override kebijakan lab. |
-| `sessions/{sessionId}` | `labId`, `labName`, `gracePeriodMinutes` *(opsional override)*, `lateFineAmount` *(opsional override)* | Jadwal sesi yang tertaut ke laboratorium. Jika override toleransi tidak ada, gunakan `labs/{labId}.gracePeriodMinutes`. |
-| `attendance/{sessionId}_{studentId}` | `attendanceStatus`: `'on_time' \| 'late' \| 'excused_absence'`, `lateMinutes`: `number`, `attendedAt`, `latitude`, `longitude`, `distanceMeters` | ID deterministik. Batas grace period inklusif: tepat pada menit ke-15 masih `on_time`. Backend menetapkan status `late` dan membuat dendanya; pembayaran tidak mengubah status kehadiran. |
-| `fines/{sessionId}_{studentId}` | `studentId`, `studentName`, `studentIdentifier`, `sessionId`, `classId`, `labId`, `attendanceId`, `practicalName`, `sessionDate`, `amount`, `lateMinutes`, `status`: `'pending' \| 'paid'`, `latestTransactionId`, `createdAt`, `paidAt` | ID deterministik → satu kejadian keterlambatan hanya menghasilkan satu tagihan denda. |
-| `paymentTransactions/{orderId}` | `orderId`, `fineId`, `sessionId`, `studentId`, `amount`, `paymentType`, `snapToken`, `redirectUrl`, `status`: `'pending' \| 'success' \| 'failed'`, `midtransTransactionStatus`, `paidAt`, `createdAt`, `updatedAt` | Riwayat transaksi persisten; status final hanya ditulis oleh backend setelah verifikasi webhook Midtrans. |
+| `sessions/{sessionId}` | `labId`, `labName`, `gracePeriodMinutes` *(override opsional)*, `lateFineAmount` *(override opsional)*, `status`, `closedAt` | Jika override kebijakan tidak ada, gunakan nilai pada lab. `closedAt` ditulis backend saat sesi ditutup menggunakan waktu server. |
+| `attendance/{sessionId}_{studentId}` | `attendanceStatus`: `'on_time' \| 'late' \| 'excused_absence'`, `lateMinutes`, `attendedAt`, `latitude`, `longitude`, `distanceMeters` | ID deterministik; backend menulis dokumen. Untuk `excused_absence`, waktu/lokasi bernilai `null` dan `lateMinutes: 0`. Absen tanpa izin disimpulkan dari roster setelah sesi ditutup; tidak ada status `absent` dalam enum Sprint 4. |
+| `fines/{sessionId}_{studentId}` | `studentId`, `studentName`, `studentIdentifier`, `sessionId`, `classId`, `labId`, `attendanceId`, `practicalName`, `sessionDate`, `amount`, `lateMinutes`, `status`: `'pending' \| 'paid'`, `latestTransactionId`, `createdAt`, `paidAt` | ID deterministik: satu keterlambatan menghasilkan paling banyak satu denda tetap. Backend membuatnya secara idempoten; `amount` integer IDR; `paidAt` bernilai `null` sampai pembayaran terverifikasi. |
+| `paymentTransactions/{orderId}` | `orderId`, `fineId`, `sessionId`, `studentId`, `amount`, `paymentType`, `snapToken`, `redirectUrl`, `status`: `'pending' \| 'success' \| 'failed'`, `midtransTransactionStatus`, `paidAt`, `createdAt`, `updatedAt` | Satu dokumen per checkout/order unik. Backend menulis status; transaksi gagal tidak mengubah denda dari `pending`, dan retry memakai order baru setelah order lama tidak aktif. |
 
 - **Kontrak Push Notification Tambahan Sprint 4:**
 
@@ -211,7 +220,7 @@ Keputusan berikut disepakati untuk implementasi Sprint 4 dan menjadi acuan bersa
 | Pembayaran berhasil | `payment_success` | `orderId`, `fineId` | Halaman Riwayat Pembayaran |
 | Pembayaran gagal / kedaluwarsa | `payment_failed` | `orderId`, `fineId` | Halaman Tagihan / Riwayat Pembayaran |
 
-- **Aturan Keamanan Pembayaran:** `MIDTRANS_SERVER_KEY` dan verifikasi `signature_key = SHA512(order_id + status_code + gross_amount + ServerKey)` wajib berjalan **hanya di backend**. Aplikasi mobile hanya memanggil endpoint backend dengan `EXPO_PUBLIC_PAYMENT_API_URL` + Firebase Auth ID Token.
+- **Aturan Keamanan Pembayaran:** `MIDTRANS_SERVER_KEY` dan `MIDTRANS_SIGNATURE_SECRET_KEY` hanya tersedia di backend. Backend memverifikasi `signature_key` webhook menggunakan `SHA512(order_id + status_code + gross_amount + SignatureSecretKey)` sesuai dokumentasi Midtrans terbaru. Aplikasi mobile hanya memanggil endpoint backend dengan `EXPO_PUBLIC_PAYMENT_API_URL` + Firebase Auth ID Token. Lihat [Midtrans Access Keys](https://docs.midtrans.com/docs/access-keys) dan [HTTP(S) Notification / Webhooks](https://docs.midtrans.com/docs/https-notification-webhooks).
 
 ### Panduan Pengembangan & Build iOS dan Android (Sampai Selesai)
 
@@ -226,7 +235,7 @@ Keputusan berikut disepakati untuk implementasi Sprint 4 dan menjadi acuan bersa
 - **Variabel Environment Client (`.env` / EAS Env):**
   - Tetap gunakan seluruh `EXPO_PUBLIC_FIREBASE_*`, `GOOGLE_MAPS_API_KEY`, dan tambahkan `EXPO_PUBLIC_PAYMENT_API_URL` (URL backend payment + Midtrans Sandbox). **Jangan** pernah menaruh `MIDTRANS_SERVER_KEY` di `.env` aplikasi Expo.
 - **Variabel Environment Backend Payment:**
-  - `MIDTRANS_SERVER_KEY`, `MIDTRANS_CLIENT_KEY`, `MIDTRANS_IS_PRODUCTION=false`, dan kredensial Firebase Admin SDK.
+  - `MIDTRANS_SERVER_KEY`, `MIDTRANS_SIGNATURE_SECRET_KEY`, `MIDTRANS_IS_PRODUCTION=false`, dan kredensial Firebase Admin SDK. `MIDTRANS_CLIENT_KEY` hanya diperlukan jika integrasi yang dipilih memakainya.
 
 #### 2. Alur Build & Pengujian Android
 ```bash
@@ -280,7 +289,7 @@ npx eas-cli@latest build --profile preview --platform android
 
 ### Urutan Pengerjaan dan Kriteria Selesai (Sprint 4)
 
-1. **Fase 1 — Kontrak Data, 3 Peran & Backend Setup:** Sepakati skema Firestore Sprint 4 (`aslab`/`asisten`/`praktikan`, `labs`, `fines`, `paymentTransactions`), tambahkan `ios.bundleIdentifier` di `app.json`, dan siapkan kerangka backend Midtrans Sandbox + Webhook.
+1. **Fase 1 — Kontrak Data, 3 Peran & Backend Setup:** Terapkan kontrak Firestore Sprint 4 (`aslab`/`asisten`/`praktikan`, `labs`, `attendance`, `fines`, `paymentTransactions`), tambahkan `ios.bundleIdentifier` di `app.json`, dan siapkan backend endpoint presensi/penutupan sesi serta Midtrans Sandbox + webhook sesuai kontrak di atas.
 2. **Fase 2 — Implementasi Paralel Inti:**
    - **Programmer 1:** update navigasi 3 peran, perhitungan *grace period* & pencatatan denda deterministik, halaman tagihan & checkout Midtrans client, halaman riwayat pembayaran, dan handler notifikasi baru.
    - **Programmer 2:** CRUD lab + 3 alur bulk insert terpisah dengan downloadable template & `ScrollView` staging editor, perpindahan praktikan/asisten antar-lab, dashboard keberlangsungan lab Aslab (filter hari/minggu/bulan + riwayat keuangan denda), pembatasan ruang lingkup Asisten, serta endpoint backend Midtrans + Webhook & pembaruan `firestore.rules`.
