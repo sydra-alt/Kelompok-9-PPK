@@ -1,12 +1,21 @@
 import Constants from 'expo-constants';
 import { router } from 'expo-router';
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { Linking, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import {
+  ActivityIndicator,
+  Linking,
+  Modal,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Text,
+  View,
+} from 'react-native';
 import { WebView, type WebViewMessageEvent } from 'react-native-webview';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { AppButton } from '@/components/AppButton';
 import { EmptyState } from '@/components/EmptyState';
-import { LoadingState } from '@/components/LoadingState';
 import { AppColors, CardShadow, Radius } from '@/constants/app-theme';
 import { Spacing } from '@/constants/theme';
 import { useAuth } from '@/context/AuthContext';
@@ -94,7 +103,7 @@ function createGoogleMapsHtml(apiKey: string) {
             : null);
         }
 
-        const selectedLab = labs.find((lab) => lab.id === data.selectedLabId) || labs[0];
+        const selectedLab = labs.find((lab) => lab.id === data.selectedLabId);
         if (attendanceCircle) attendanceCircle.setMap(null);
         if (selectedLab) {
           const center = { lat: selectedLab.latitude, lng: selectedLab.longitude };
@@ -156,6 +165,7 @@ function createGoogleMapsHtml(apiKey: string) {
 
 export default function StudentLabsMapScreen() {
   const { profile } = useAuth();
+  const insets = useSafeAreaInsets();
   const { sessions, error: studentDataError, fromCache, isOffline, retry } = useStudentData();
   const mapRef = useRef<WebView<object> | null>(null);
   const [labs, setLabs] = useState<Lab[]>([]);
@@ -171,7 +181,7 @@ export default function StudentLabsMapScreen() {
   const [mapError, setMapError] = useState<string | null>(null);
   const [mapReloadKey, setMapReloadKey] = useState(0);
 
-  const selectedLab = labs.find((lab) => lab.id === selectedLabId) ?? labs[0] ?? null;
+  const selectedLab = labs.find((lab) => lab.id === selectedLabId) ?? null;
   const selectedMapLabId = selectedLab?.id;
   useEffect(() => {
     return subscribeLabs(
@@ -286,117 +296,177 @@ export default function StudentLabsMapScreen() {
     );
   }
 
-  if (labsLoading && labs.length === 0) {
-    return (
-      <View style={styles.loadingScreen}>
+  return (
+    <View style={styles.screen}>
+      {GOOGLE_MAPS_API_KEY ? (
+        <WebView<object>
+          key={mapReloadKey}
+          ref={mapRef}
+          style={styles.map}
+          originWhitelist={['*']}
+          source={{ html: createGoogleMapsHtml(GOOGLE_MAPS_API_KEY) }}
+          javaScriptEnabled
+          domStorageEnabled
+          scrollEnabled={false}
+          onMessage={handleMapMessage}
+          onError={(event) => setMapError(event.nativeEvent.description || 'WebView gagal memuat peta.')}
+          onHttpError={(event) => setMapError(`Peta gagal dimuat (HTTP ${event.nativeEvent.statusCode}).`)}
+        />
+      ) : (
+        <View style={[styles.mapFallback, StyleSheet.absoluteFill]}>
+          <Text style={styles.mapErrorText}>Maps Demo Key belum tersedia pada konfigurasi aplikasi.</Text>
+        </View>
+      )}
+
+      <View pointerEvents="box-none" style={styles.topOverlay}>
         <ConnectionBanner
           isOffline={isOffline}
           fromCache={fromCache || labsFromCache}
           error={labsError ?? studentDataError}
           onRetry={retryMapData}
         />
-        <LoadingState title="Memuat peta laboratorium..." message="Mengambil lokasi lab dari Firestore." />
-      </View>
-    );
-  }
-
-  return (
-    <ScrollView contentContainerStyle={styles.content}>
-      <ConnectionBanner
-        isOffline={isOffline}
-        fromCache={fromCache || labsFromCache}
-        error={labsError ?? studentDataError}
-        onRetry={retryMapData}
-      />
-      {locationError ? (
-        <View style={styles.locationNotice}>
-          <Text style={styles.noticeText}>{locationError}</Text>
-          <AppButton
-            title="Coba Deteksi Lokasi Lagi"
-            variant="secondary"
-            onPress={() => setLocationRetryKey((key) => key + 1)}
-          />
-          <AppButton title="Buka Pengaturan Aplikasi" variant="ghost" onPress={() => void Linking.openSettings()} />
-        </View>
-      ) : null}
-
-      <View style={styles.mapFrame}>
-        {GOOGLE_MAPS_API_KEY ? (
-          <WebView<object>
-            key={mapReloadKey}
-            ref={mapRef}
-            style={styles.map}
-            originWhitelist={['*']}
-            source={{ html: createGoogleMapsHtml(GOOGLE_MAPS_API_KEY) }}
-            javaScriptEnabled
-            domStorageEnabled
-            scrollEnabled={false}
-            onMessage={handleMapMessage}
-            onError={(event) => setMapError(event.nativeEvent.description || 'WebView gagal memuat peta.')}
-            onHttpError={(event) => setMapError(`Peta gagal dimuat (HTTP ${event.nativeEvent.statusCode}).`)}
-          />
-        ) : (
-          <View style={styles.mapFallback}>
-            <Text style={styles.mapErrorText}>Maps Demo Key belum tersedia pada konfigurasi aplikasi.</Text>
+        {labsLoading && labs.length === 0 ? (
+          <View style={styles.statusPill}>
+            <ActivityIndicator size="small" color={AppColors.primary} />
+            <Text style={styles.statusPillText}>Memuat laboratorium...</Text>
           </View>
-        )}
-        {mapError ? (
-          <View style={styles.mapErrorOverlay}>
-            <Text style={styles.mapErrorText}>{mapError}</Text>
-            <AppButton
-              title="Muat Ulang Peta"
-              variant="secondary"
-              onPress={() => {
-                setMapError(null);
-                setMapReady(false);
-                setMapReloadKey((key) => key + 1);
-              }}
-            />
+        ) : null}
+        {locationError ? (
+          <View style={styles.locationNotice}>
+            <Text style={styles.noticeText}>{locationError}</Text>
+            <View style={styles.noticeActions}>
+              <AppButton
+                title="Coba Lagi"
+                variant="secondary"
+                onPress={() => setLocationRetryKey((key) => key + 1)}
+              />
+              <AppButton
+                title="Pengaturan"
+                variant="ghost"
+                onPress={() => void Linking.openSettings()}
+              />
+            </View>
           </View>
         ) : null}
       </View>
 
-      {labs.length === 0 ? (
-        <View style={styles.card}>
+      {!labsLoading && labs.length === 0 ? (
+        <View style={styles.emptyLabs}>
           <Text style={styles.sectionTitle}>Belum ada laboratorium</Text>
           <Text style={styles.bodyText}>Tambahkan dokumen pada koleksi `labs` untuk menampilkan marker.</Text>
         </View>
-      ) : selectedLab ? (
-        <View style={styles.card}>
-          <Text style={styles.sectionTitle}>{selectedLab.name}</Text>
-          <Text style={styles.bodyText}>
-            {selectedLab.building ? `${selectedLab.building} · ` : ''}Radius presensi {selectedLab.radiusMeters} m
-          </Text>
-          {selectedLab.description ? <Text style={styles.bodyText}>{selectedLab.description}</Text> : null}
+      ) : null}
 
-          <View style={styles.divider} />
-          <Text style={styles.activityHeading}>Praktikum sedang berlangsung</Text>
-          {activity.active.length > 0 ? (
-            activity.active.map((session) => (
-              <ActivityRow key={session.id} session={session} statusLabel="Dibuka" />
-            ))
-          ) : (
-            <Text style={styles.bodyText}>Tidak ada sesi yang sedang dibuka.</Text>
-          )}
-
-          <View style={styles.divider} />
-          <Text style={styles.activityHeading}>Praktikum berikutnya</Text>
-          {activity.next ? (
-            <ActivityRow session={activity.next} statusLabel="Terjadwal" />
-          ) : (
-            <Text style={styles.bodyText}>Belum ada sesi terjadwal berikutnya untuk lab ini.</Text>
-          )}
+      {!labsLoading && labs.length > 0 && !selectedLab ? (
+        <View style={styles.mapHint} pointerEvents="none">
+          <Text style={styles.mapHintText}>Ketuk marker untuk melihat informasi laboratorium</Text>
         </View>
       ) : null}
-    </ScrollView>
+
+      {mapError ? (
+        <View style={styles.mapErrorOverlay}>
+          <Text style={styles.mapErrorText}>{mapError}</Text>
+          <AppButton
+            title="Muat Ulang Peta"
+            variant="secondary"
+            onPress={() => {
+              setMapError(null);
+              setMapReady(false);
+              setMapReloadKey((key) => key + 1);
+            }}
+          />
+        </View>
+      ) : null}
+
+      <Modal
+        visible={Boolean(selectedLab)}
+        transparent
+        animationType="slide"
+        statusBarTranslucent
+        onRequestClose={() => setSelectedLabId(null)}>
+        <View style={styles.sheetRoot}>
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Tutup informasi laboratorium"
+            style={styles.sheetBackdrop}
+            onPress={() => setSelectedLabId(null)}
+          />
+          {selectedLab ? (
+            <View style={[styles.sheet, { paddingBottom: Math.max(insets.bottom, Spacing.four) }]}>
+              <View style={styles.sheetHandle} />
+              <View style={styles.sheetHeader}>
+                <View style={styles.sheetTitleBlock}>
+                  <Text style={styles.sectionTitle}>{selectedLab.name}</Text>
+                  <Text style={styles.bodyText}>
+                    {selectedLab.building ? `${selectedLab.building} · ` : ''}
+                    Radius presensi {selectedLab.radiusMeters} m
+                  </Text>
+                </View>
+                <Pressable
+                  accessibilityRole="button"
+                  accessibilityLabel="Tutup"
+                  onPress={() => setSelectedLabId(null)}
+                  style={styles.closeButton}>
+                  <Text style={styles.closeButtonText}>×</Text>
+                </Pressable>
+              </View>
+              <ScrollView style={styles.sheetScroll} contentContainerStyle={styles.sheetContent}>
+                {selectedLab.description ? <Text style={styles.bodyText}>{selectedLab.description}</Text> : null}
+
+                <View style={styles.divider} />
+                <Text style={styles.activityHeading}>Praktikum sedang berlangsung</Text>
+                {activity.active.length > 0 ? (
+                  activity.active.map((session) => (
+                    <ActivityRow
+                      key={session.id}
+                      session={session}
+                      statusLabel="Dibuka"
+                      onPress={() => {
+                        setSelectedLabId(null);
+                        router.push({ pathname: '/student/session/[sessionId]', params: { sessionId: session.id } });
+                      }}
+                    />
+                  ))
+                ) : (
+                  <Text style={styles.bodyText}>Tidak ada sesi yang sedang dibuka.</Text>
+                )}
+
+                <View style={styles.divider} />
+                <Text style={styles.activityHeading}>Praktikum berikutnya</Text>
+                {activity.next ? (
+                  <ActivityRow
+                    session={activity.next}
+                    statusLabel="Terjadwal"
+                    onPress={() => {
+                      setSelectedLabId(null);
+                      router.push({ pathname: '/student/session/[sessionId]', params: { sessionId: activity.next!.id } });
+                    }}
+                  />
+                ) : (
+                  <Text style={styles.bodyText}>Belum ada sesi terjadwal berikutnya untuk lab ini.</Text>
+                )}
+              </ScrollView>
+            </View>
+          ) : null}
+        </View>
+      </Modal>
+    </View>
   );
 }
 
-function ActivityRow({ session, statusLabel }: { session: PracticeSession; statusLabel: string }) {
+function ActivityRow({
+  session,
+  statusLabel,
+  onPress,
+}: {
+  session: PracticeSession;
+  statusLabel: string;
+  onPress: () => void;
+}) {
   return (
     <Pressable
       accessibilityRole="button"
-      onPress={() => router.push({ pathname: '/student/session/[sessionId]', params: { sessionId: session.id } })}
+      onPress={onPress}
       style={({ pressed }) => [styles.activityRow, pressed && styles.pressed]}>
       <View style={styles.activityText}>
         <Text style={styles.activityName}>{session.practicalName} · {session.className}</Text>
@@ -404,55 +474,68 @@ function ActivityRow({ session, statusLabel }: { session: PracticeSession; statu
           {formatDate(session.date)} · {formatTimeRange(session.startTime, session.endTime)}
         </Text>
       </View>
-      <Text style={styles.statusText}>{statusLabel}</Text>
+      <Text style={styles.sessionStatusText}>{statusLabel}</Text>
     </Pressable>
   );
 }
 
 const styles = StyleSheet.create({
-  loadingScreen: {
-    flex: 1,
-    backgroundColor: AppColors.background,
-    padding: Spacing.three,
-    gap: Spacing.three,
-  },
-  content: {
-    width: '100%',
-    maxWidth: 900,
-    alignSelf: 'center',
-    padding: Spacing.three,
-    paddingBottom: Spacing.six,
-    gap: Spacing.three,
-  },
-  mapFrame: {
-    height: 400,
-    borderRadius: Radius.lg,
-    overflow: 'hidden',
-    borderWidth: 1,
-    borderColor: AppColors.border,
-  },
-  map: { flex: 1 },
+  screen: { flex: 1, backgroundColor: AppColors.background },
+  map: { ...StyleSheet.absoluteFill },
   mapFallback: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: Spacing.three },
-  mapErrorOverlay: {
+  topOverlay: {
     position: 'absolute',
-    left: Spacing.two,
-    right: Spacing.two,
-    top: Spacing.two,
-    padding: Spacing.two,
+    top: 0,
+    left: Spacing.three,
+    right: Spacing.three,
     gap: Spacing.two,
-    backgroundColor: AppColors.surface,
-    borderRadius: Radius.md,
   },
-  mapErrorText: { color: AppColors.danger, fontSize: 13, lineHeight: 19 },
-  card: {
+  statusPill: {
+    alignSelf: 'center',
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.two,
+    paddingHorizontal: Spacing.three,
+    paddingVertical: Spacing.two,
+    borderRadius: Radius.pill,
     backgroundColor: AppColors.surface,
-    borderRadius: Radius.lg,
-    borderWidth: 1,
-    borderColor: AppColors.border,
-    padding: Spacing.four,
-    gap: Spacing.three,
     ...CardShadow,
   },
+  statusPillText: { color: AppColors.text, fontSize: 12, fontWeight: '700' },
+  emptyLabs: {
+    position: 'absolute',
+    left: Spacing.three,
+    right: Spacing.three,
+    bottom: Spacing.three,
+    padding: Spacing.three,
+    gap: Spacing.one,
+    backgroundColor: AppColors.surface,
+    borderRadius: Radius.lg,
+    ...CardShadow,
+  },
+  mapHint: {
+    position: 'absolute',
+    alignSelf: 'center',
+    bottom: Spacing.three,
+    paddingHorizontal: Spacing.three,
+    paddingVertical: Spacing.two,
+    borderRadius: Radius.pill,
+    backgroundColor: AppColors.surface,
+    ...CardShadow,
+  },
+  mapHintText: { color: AppColors.text, fontSize: 12, fontWeight: '700' },
+  mapErrorOverlay: {
+    position: 'absolute',
+    left: Spacing.three,
+    right: Spacing.three,
+    top: '40%',
+    padding: Spacing.three,
+    gap: Spacing.two,
+    backgroundColor: AppColors.surface,
+    borderRadius: Radius.lg,
+    ...CardShadow,
+  },
+  mapErrorText: { color: AppColors.danger, fontSize: 13, lineHeight: 19 },
   sectionTitle: { color: AppColors.text, fontSize: 19, fontWeight: '800' },
   activityHeading: { color: AppColors.text, fontSize: 15, fontWeight: '700' },
   bodyText: { color: AppColors.textMuted, fontSize: 13, lineHeight: 19 },
@@ -460,9 +543,50 @@ const styles = StyleSheet.create({
   activityRow: { flexDirection: 'row', alignItems: 'center', gap: Spacing.two, paddingVertical: Spacing.one },
   activityText: { flex: 1, gap: 3 },
   activityName: { color: AppColors.text, fontSize: 14, fontWeight: '700' },
-  statusText: { color: AppColors.primary, fontSize: 12, fontWeight: '700' },
-  locationNotice: { gap: Spacing.two, padding: Spacing.three, backgroundColor: AppColors.warningSoft, borderRadius: Radius.md },
+  sessionStatusText: { color: AppColors.primary, fontSize: 12, fontWeight: '700' },
+  locationNotice: {
+    gap: Spacing.two,
+    padding: Spacing.three,
+    backgroundColor: AppColors.surface,
+    borderRadius: Radius.md,
+    ...CardShadow,
+  },
   noticeText: { color: AppColors.text, fontSize: 13, lineHeight: 19 },
-  errorMessage: { color: AppColors.danger, fontSize: 13, lineHeight: 19 },
+  noticeActions: { flexDirection: 'row', flexWrap: 'wrap', gap: Spacing.two },
   pressed: { opacity: 0.75 },
+  sheetRoot: { flex: 1, justifyContent: 'flex-end' },
+  sheetBackdrop: {
+    ...StyleSheet.absoluteFill,
+    backgroundColor: AppColors.overlay,
+  },
+  sheet: {
+    maxHeight: '78%',
+    backgroundColor: AppColors.surface,
+    borderTopLeftRadius: Radius.xl,
+    borderTopRightRadius: Radius.xl,
+    paddingHorizontal: Spacing.four,
+    paddingTop: Spacing.two,
+    gap: Spacing.three,
+    ...CardShadow,
+  },
+  sheetHandle: {
+    width: 42,
+    height: 5,
+    borderRadius: Radius.pill,
+    alignSelf: 'center',
+    backgroundColor: AppColors.border,
+  },
+  sheetHeader: { flexDirection: 'row', alignItems: 'center', gap: Spacing.two },
+  sheetTitleBlock: { flex: 1, gap: Spacing.one },
+  closeButton: {
+    width: 38,
+    height: 38,
+    borderRadius: Radius.pill,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: AppColors.background,
+  },
+  closeButtonText: { color: AppColors.text, fontSize: 26, lineHeight: 29 },
+  sheetScroll: { flexGrow: 0 },
+  sheetContent: { gap: Spacing.three, paddingBottom: Spacing.two },
 });
