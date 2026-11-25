@@ -26,6 +26,8 @@ export const navigateTo = {
   studentLabsMap: () => router.push('/student/maps' as any),
   studentHistory: (studentId?: string) =>
     router.push({ pathname: '/student/history', params: studentId ? { studentId } : undefined }),
+  studentFines: () => router.push('/student/fines' as any),
+  studentPayments: () => router.push('/student/payments' as any),
   studentPermissions: () => router.push('/student/permissions' as any),
   assistantHome: (assistantId: string) =>
     router.push({ pathname: '/assistant', params: { assistantId } }),
@@ -84,6 +86,8 @@ export default function AppNavigator() {
           options={{ title: 'Peta Laboratorium', headerBackVisible: true }}
         />
         <Stack.Screen name="student/history" options={{ title: 'Riwayat Kehadiran' }} />
+        <Stack.Screen name="student/fines" options={{ title: 'Tagihan Denda' }} />
+        <Stack.Screen name="student/payments" options={{ title: 'Riwayat Pembayaran' }} />
         <Stack.Screen name="student/permissions" options={{ title: 'Pengajuan Izin' }} />
       </Stack.Protected>
 

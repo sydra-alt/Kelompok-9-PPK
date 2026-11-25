@@ -483,7 +483,7 @@ export function subscribeAttendanceForClasses(
         snap.docs
           .map(toAttendanceRecord)
           .sort((a: AttendanceRecord, b: AttendanceRecord) =>
-            b.attendanceTime.localeCompare(a.attendanceTime),
+            (b.attendanceTime ?? '').localeCompare(a.attendanceTime ?? ''),
           ),
         { fromCache: snap.metadata.fromCache },
       ),

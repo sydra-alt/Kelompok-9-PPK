@@ -13,13 +13,25 @@ import { navigateTo } from '@/navigation/AppNavigator';
 import type { AttendanceRecord, PermissionRequest, PracticeSession } from '@/types';
 import { formatClock, formatDate } from '@/utils/format';
 
-type HistoryStatus = 'present' | 'excused' | 'absent' | 'pending';
+type HistoryStatus = 'present' | 'late' | 'excused' | 'absent' | 'pending';
 
 interface HistoryEntry {
   session: PracticeSession;
   record?: AttendanceRecord;
   permission?: PermissionRequest;
   status: HistoryStatus;
+}
+
+function getHistoryStatus(
+  record: AttendanceRecord | undefined,
+  permission: PermissionRequest | undefined,
+  session: PracticeSession,
+): HistoryStatus {
+  if (record?.attendanceStatus === 'excused_absence') return 'excused';
+  if (record?.attendanceStatus === 'late') return 'late';
+  if (record) return 'present';
+  if (permission?.status === 'approved') return 'excused';
+  return session.status === 'closed' ? 'absent' : 'pending';
 }
 
 const HISTORY_META: Record<
@@ -31,6 +43,12 @@ const HISTORY_META: Record<
     color: AppColors.success,
     background: AppColors.successSoft,
     icon: '✓',
+  },
+  late: {
+    label: 'Terlambat',
+    color: AppColors.warning,
+    background: AppColors.warningSoft,
+    icon: '⏱',
   },
   excused: {
     label: 'Izin Disetujui',
@@ -82,13 +100,7 @@ export default function StudentAttendanceHistoryScreen() {
       .map((session) => {
         const record = recordBySession.get(session.id);
         const permission = permissionBySession.get(session.id);
-        const status: HistoryStatus = record
-          ? 'present'
-          : permission?.status === 'approved'
-            ? 'excused'
-            : session.status === 'closed'
-              ? 'absent'
-              : 'pending';
+        const status = getHistoryStatus(record, permission, session);
         return { session, record, permission, status };
       })
       .reverse(); // terbaru di atas
@@ -127,7 +139,7 @@ export default function StudentAttendanceHistoryScreen() {
     );
   }
 
-  const presentCount = entries.filter((e) => e.status === 'present').length;
+  const presentCount = entries.filter((e) => e.status === 'present' || e.status === 'late').length;
   const excusedCount = entries.filter((e) => e.status === 'excused').length;
   const absentCount = entries.filter((e) => e.status === 'absent').length;
   const counted = presentCount + excusedCount + absentCount;
@@ -206,7 +218,11 @@ function SummaryItem({ value, label, color }: { value: string; label: string; co
 function HistoryItem({ entry, onPress }: { entry: HistoryEntry; onPress: () => void }) {
   const meta = HISTORY_META[entry.status];
   const detailText = entry.record
-    ? `Presensi pukul ${formatClock(entry.record.attendanceTime)} WIB`
+    ? entry.record.attendanceStatus === 'excused_absence'
+      ? 'Izin ketidakhadiran disetujui; tidak dikenai denda'
+      : entry.record.attendanceTime
+        ? `${entry.record.attendanceStatus === 'late' ? `Terlambat ${entry.record.lateMinutes ?? 0} menit · ` : ''}Presensi pukul ${formatClock(entry.record.attendanceTime)} WIB`
+        : 'Data waktu presensi tidak tersedia'
     : entry.status === 'excused'
       ? 'Izin ketidakhadiran disetujui asisten'
       : entry.permission?.status === 'pending'

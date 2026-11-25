@@ -4,6 +4,7 @@ import type {
   AiClassification,
   AiClassificationStatus,
   AttendanceRecord,
+  AttendanceStatus,
   ClassMembership,
   Lab,
   PermissionRequest,
@@ -164,6 +165,9 @@ export function toPracticeSession(snap: DocumentSnapshot): PracticeSession {
 
 export function toAttendanceRecord(snap: DocumentSnapshot): AttendanceRecord {
   const d = readData(snap);
+  const attendanceStatus = ['on_time', 'late', 'excused_absence'].includes(d.attendanceStatus)
+    ? (d.attendanceStatus as AttendanceStatus)
+    : undefined;
   return {
     id: snap.id,
     sessionId: str(d.sessionId),
@@ -171,7 +175,9 @@ export function toAttendanceRecord(snap: DocumentSnapshot): AttendanceRecord {
     studentId: str(d.studentId),
     studentName: str(d.studentName),
     studentIdentifier: optStr(d.studentIdentifier),
-    attendanceTime: timestampToLocal(d.attendedAt) ?? nowLocalDateTime(),
+    attendanceTime: timestampToLocal(d.attendedAt),
+    attendanceStatus,
+    lateMinutes: finiteNumber(d.lateMinutes),
     latitude: finiteNumber(d.latitude),
     longitude: finiteNumber(d.longitude),
     distanceMeters: finiteNumber(d.distanceMeters),

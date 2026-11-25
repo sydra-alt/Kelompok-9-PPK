@@ -194,7 +194,7 @@ export default function AttendanceRecapScreen() {
                   record.distanceMeters !== undefined;
                 const isWithinCurrentRadius =
                   hasLocation && selectedLab ? record.distanceMeters! <= selectedLab.radiusMeters : true;
-                const datePart = record.attendanceTime.split('T')[0];
+                const datePart = record.attendanceTime?.split('T')[0] ?? '';
                 const formattedDate = /^\d{4}-\d{2}-\d{2}$/.test(datePart)
                   ? formatDate(datePart)
                   : '-';
@@ -252,7 +252,9 @@ export default function AttendanceRecapScreen() {
                       )}
                     </View>
                     <View style={styles.timeColumn}>
-                      <Text style={styles.timeValue}>{formatClock(record.attendanceTime)} WIB</Text>
+                      <Text style={styles.timeValue}>
+                        {record.attendanceTime ? `${formatClock(record.attendanceTime)} WIB` : '—'}
+                      </Text>
                       <Text style={styles.timeLabel}>{formattedDate}</Text>
                     </View>
                   </View>

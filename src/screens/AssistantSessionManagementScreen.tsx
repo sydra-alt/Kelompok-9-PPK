@@ -269,7 +269,9 @@ export default function AssistantSessionManagementScreen() {
                       </Text>
                     )}
                   </View>
-                  <Text style={styles.time}>{formatClock(record.attendanceTime)} WIB</Text>
+                  <Text style={styles.time}>
+                    {record.attendanceTime ? `${formatClock(record.attendanceTime)} WIB` : '—'}
+                  </Text>
                 </View>
               );
             })

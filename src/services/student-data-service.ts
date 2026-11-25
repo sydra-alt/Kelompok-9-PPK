@@ -191,7 +191,9 @@ export function subscribeStudentAttendance(
     { includeMetadataChanges: true },
     (snap) =>
       onData(
-        snap.docs.map(toAttendanceRecord).sort((a, b) => b.attendanceTime.localeCompare(a.attendanceTime)),
+        snap.docs.map(toAttendanceRecord).sort((a, b) =>
+          (b.attendanceTime ?? '').localeCompare(a.attendanceTime ?? ''),
+        ),
         { fromCache: snap.metadata.fromCache },
       ),
     onError,

@@ -244,6 +244,22 @@ export default function StudentHomeScreen() {
                 style={styles.actionButton}
               />
             </View>
+            <View style={styles.actionRow}>
+              <AppButton
+                testID="open-fines-button"
+                title="💳 Tagihan Denda"
+                variant="secondary"
+                onPress={navigateTo.studentFines}
+                style={styles.actionButton}
+              />
+              <AppButton
+                testID="open-payment-history-button"
+                title="🧾 Riwayat Bayar"
+                variant="secondary"
+                onPress={navigateTo.studentPayments}
+                style={styles.actionButton}
+              />
+            </View>
             <AppButton
               testID="open-labs-map-button"
               title="🗺️ Peta Laboratorium"
