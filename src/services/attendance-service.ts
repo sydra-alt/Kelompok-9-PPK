@@ -1,10 +1,10 @@
 import { AppError } from '@/services/errors';
-import { submitAttendanceToBackend } from '@/services/sprint4-api-service';
+import { submitAttendanceToBackend } from '@/services/attendance-payment-api-service';
 import type { PracticeSession } from '@/types';
-import type { AttendanceSubmissionResult } from '@/types/sprint4';
+import type { AttendanceSubmissionResult } from '@/types/attendance-api';
 
 /**
- * Praktikan attendance client (Sprint 4).
+ * Client untuk mengirim permintaan presensi praktikan.
  * The client requests attendance; the trusted backend validates location/time,
  * writes the attendance record, and creates a fine when the student is late.
  */

@@ -16,7 +16,7 @@ import type { PermissionRequest, PracticeSession } from '@/types';
 import { formatDate } from '@/utils/format';
 
 /**
- * Service pemicu & pengiriman push notification sisi asisten (PIC: Programmer 2).
+ * Pemicu dan pengiriman push notification dari alur asisten.
  *
  * Kontrak payload mengikuti `docs/Sprint 3 Kontrak Notifikasi.md` dan ditangani
  * oleh `src/components/NotificationRuntime.tsx` di perangkat penerima:

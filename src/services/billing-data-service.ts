@@ -6,10 +6,9 @@ import type {
   FineStatus,
   PaymentTransaction,
   PaymentTransactionStatus,
-} from '@/types/sprint4';
+} from '@/types/payments';
 
-// Kept in this Sprint 4 module to avoid colliding with Programmer 2's shared
-// Firestore schema work. These names match the agreed README contract.
+// Collection names follow the data contract documented in the README.
 const FINES_COLLECTION = 'fines';
 const PAYMENTS_COLLECTION = 'paymentTransactions';
 

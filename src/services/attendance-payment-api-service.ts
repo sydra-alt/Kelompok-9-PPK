@@ -1,7 +1,8 @@
 import { getFirebaseAuth } from '@/services/firebase';
 import { getCurrentDeviceLocation } from '@/services/location-service';
 import { AppError, withTimeout } from '@/services/errors';
-import type { AttendanceSubmissionResult, PaymentCheckout } from '@/types/sprint4';
+import type { AttendanceSubmissionResult } from '@/types/attendance-api';
+import type { PaymentCheckout } from '@/types/payments';
 
 interface ApiErrorBody {
   code?: unknown;
@@ -20,15 +21,15 @@ const API_ERROR_MESSAGES: Record<string, string> = {
   UNAUTHENTICATED: 'Sesi login berakhir. Silakan masuk kembali.',
 };
 
-export const isSprint4BackendConfigured = () =>
+export const isBackendApiConfigured = () =>
   Boolean(process.env.EXPO_PUBLIC_PAYMENT_API_URL?.trim());
 
 function getBaseUrl(): string {
   const value = process.env.EXPO_PUBLIC_PAYMENT_API_URL?.trim().replace(/\/+$/, '');
   if (!value) {
     throw new AppError(
-      'sprint4-backend-not-configured',
-      'Backend Sprint 4 belum dikonfigurasi. Checkout dan presensi backend belum tersedia.',
+      'backend-api-not-configured',
+      'Backend aplikasi belum dikonfigurasi. Checkout dan presensi belum tersedia.',
     );
   }
   return value;

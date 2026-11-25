@@ -28,7 +28,7 @@ import type {
 } from '@/types';
 
 /**
- * Pembacaan data milik praktikan (PIC: Programmer 1). Semua fungsi memakai
+ * Pembacaan data milik praktikan. Semua fungsi memakai
  * listener real-time `onSnapshot` dan mengembalikan fungsi unsubscribe.
  *
  * Semua query difilter berdasarkan uid / keanggotaan kelas praktikan sehingga

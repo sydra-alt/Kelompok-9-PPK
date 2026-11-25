@@ -19,7 +19,7 @@ import { nowLocalDateTime } from '@/utils/format';
 
 /**
  * Kontrak nama koleksi & pembentuk ID dokumen Firestore.
- * Dipakai bersama alur praktikan (Programmer 1) dan asisten (Programmer 2).
+ * Dipakai bersama oleh layanan data praktikan dan asisten.
  * Detail field: `docs/Firestore Schema.md`.
  */
 export const COLLECTIONS = {

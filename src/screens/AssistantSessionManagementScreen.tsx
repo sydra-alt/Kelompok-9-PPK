@@ -25,7 +25,7 @@ import { formatClock, formatDate, formatTimeRange } from '@/utils/format';
 type PendingAction = 'open' | 'close';
 
 /**
- * Layar manajemen sesi praktikum oleh asisten (PIC: Programmer 2).
+ * Layar manajemen sesi praktikum oleh asisten.
  * Menampilkan detail sesi, rekap kehadiran sementara secara real-time dari Firestore,
  * dan kontrol membuka/menutup sesi dengan validasi otoritas asisten.
  */

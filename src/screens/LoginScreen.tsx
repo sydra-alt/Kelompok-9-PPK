@@ -39,7 +39,7 @@ interface Feedback {
 }
 
 /**
- * Layar autentikasi utama (PIC: Programmer 1).
+ * Layar autentikasi utama.
  * Menangani pemulihan sesi, validasi konfigurasi Firebase, login, lupa sandi,
  * serta pelengkapan profil bila dokumen `users/{uid}` belum tersedia.
  */

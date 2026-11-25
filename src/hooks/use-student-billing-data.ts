@@ -6,8 +6,8 @@ import {
   subscribeStudentFines,
   subscribeStudentPaymentTransactions,
   type BillingSnapshotMeta,
-} from '@/services/sprint4-data-service';
-import type { FineRecord, PaymentTransaction } from '@/types/sprint4';
+} from '@/services/billing-data-service';
+import type { FineRecord, PaymentTransaction } from '@/types/payments';
 
 interface UseStudentBillingDataResult {
   fines: FineRecord[];

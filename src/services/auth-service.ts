@@ -16,12 +16,12 @@ import { COLLECTIONS, toUserProfile } from '@/services/firestore-schema';
 import type { UserProfile } from '@/types';
 
 /**
- * Service autentikasi & profil pengguna (PIC: Programmer 1).
+ * Layanan autentikasi dan pengelolaan profil pengguna.
  *
  * Sumber peran tepercaya: field `role` di `users/{uid}`.
  * - Registrasi dari aplikasi SELALU membuat profil `praktikan`.
  * - Akun `asisten` ditetapkan oleh pengajar/admin dengan mengubah `role`
- *   langsung di Firebase Console. Security Rules (Programmer 2) melarang
+ *   langsung di Firebase Console. Security Rules melarang
  *   pengguna mengubah `role` miliknya sendiri.
  */
 

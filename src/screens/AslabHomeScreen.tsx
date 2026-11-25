@@ -5,7 +5,7 @@ import { AppColors, CardShadow, Radius } from '@/constants/app-theme';
 import { Spacing } from '@/constants/theme';
 import { useAuth } from '@/context/AuthContext';
 
-/** Initial Aslab landing page; lab management screens will be added in later Sprint 4 work. */
+/** Beranda aslab untuk mengakses fitur pengelolaan laboratorium. */
 export default function AslabHomeScreen() {
   const { profile, logout } = useAuth();
 

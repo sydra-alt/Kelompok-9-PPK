@@ -25,7 +25,7 @@ const FILTERS: { value: Filter; label: string }[] = [
 ];
 
 /**
- * Daftar pengajuan izin praktikan & status keputusan real-time (PIC: Programmer 1).
+ * Daftar pengajuan izin praktikan dan status keputusan real-time.
  */
 export default function StudentPermissionsScreen() {
   const { profile } = useAuth();

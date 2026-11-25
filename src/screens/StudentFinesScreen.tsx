@@ -13,8 +13,8 @@ import { useAuth } from '@/context/AuthContext';
 import { useStudentBillingData } from '@/hooks/use-student-billing-data';
 import { navigateTo } from '@/navigation/AppNavigator';
 import { AppError, getErrorMessage } from '@/services/errors';
-import { createFineCheckout, isSprint4BackendConfigured } from '@/services/sprint4-api-service';
-import type { FineRecord } from '@/types/sprint4';
+import { createFineCheckout, isBackendApiConfigured } from '@/services/attendance-payment-api-service';
+import type { FineRecord } from '@/types/payments';
 import { formatDate, formatDateTime } from '@/utils/format';
 
 const formatRupiah = (amount: number) =>
@@ -72,8 +72,8 @@ export default function StudentFinesScreen() {
 
   const handleCheckout = async (fine: FineRecord) => {
     if (payingFineId) return;
-    if (!isSprint4BackendConfigured()) {
-      setFeedback({ type: 'info', message: 'Checkout menunggu URL backend Sandbox dari Programmer 2.' });
+    if (!isBackendApiConfigured()) {
+      setFeedback({ type: 'info', message: 'Checkout belum tersedia sampai backend pembayaran dikonfigurasi.' });
       return;
     }
 
@@ -119,7 +119,7 @@ export default function StudentFinesScreen() {
               {pendingFines.length} tagihan belum dibayar • Status diperbarui dari backend.
             </Text>
           </View>
-          {!isSprint4BackendConfigured() ? (
+          {!isBackendApiConfigured() ? (
             <FeedbackBanner
               type="info"
               title="Checkout belum dikonfigurasi"

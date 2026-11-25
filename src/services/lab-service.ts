@@ -17,7 +17,7 @@ import { COLLECTIONS, toLab } from '@/services/firestore-schema';
 import type { Lab } from '@/types';
 
 /**
- * Service manajemen data laboratorium (PIC: Programmer 2).
+ * Layanan pengelolaan data laboratorium.
  *
  * Menyediakan listener real-time dan CRUD koleksi `labs` di Firestore sebagai
  * acuan marker peta dan validasi radius presensi praktikan.

@@ -39,7 +39,7 @@ import type {
 } from '@/types';
 
 /**
- * Service data asisten (PIC: Programmer 2).
+ * Layanan data dan operasi praktikum untuk asisten.
  *
  * Semua query memakai listener real-time `onSnapshot`. Penulisan data
  * (CRUD kelas, sesi, keputusan izin) dijaga dengan timeout agar tidak

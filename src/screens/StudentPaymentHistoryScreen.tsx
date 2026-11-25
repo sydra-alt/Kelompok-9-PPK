@@ -9,7 +9,7 @@ import { Spacing } from '@/constants/theme';
 import { useAuth } from '@/context/AuthContext';
 import { useStudentBillingData } from '@/hooks/use-student-billing-data';
 import { navigateTo } from '@/navigation/AppNavigator';
-import type { PaymentTransaction } from '@/types/sprint4';
+import type { PaymentTransaction } from '@/types/payments';
 import { formatDateTime } from '@/utils/format';
 
 const formatRupiah = (amount: number) =>

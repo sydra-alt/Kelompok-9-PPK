@@ -4,7 +4,7 @@ import { AppColors } from '@/constants/app-theme';
 import { useAuth } from '@/context/AuthContext';
 
 /**
- * Fondasi navigasi aplikasi (PIC: Programmer 1, koordinasi dengan Programmer 2).
+ * Navigasi utama aplikasi berdasarkan status autentikasi dan peran pengguna.
  *
  * Sprint 2: rute dilindungi dengan `Stack.Protected` berdasarkan status
  * autentikasi Firebase & peran tepercaya dari `users/{uid}`:
@@ -71,7 +71,7 @@ export default function AppNavigator() {
         <Stack.Screen name="register" options={{ title: 'Registrasi Praktikan' }} />
       </Stack.Protected>
 
-      {/* Alur praktikan — Programmer 1 */}
+      {/* Alur praktikan */}
       <Stack.Protected
         guard={isStudent}
         redirectTo={isAssistant ? '/assistant' : isLabAssistant ? '/aslab/index' : '/'}>
@@ -91,7 +91,7 @@ export default function AppNavigator() {
         <Stack.Screen name="student/permissions" options={{ title: 'Pengajuan Izin' }} />
       </Stack.Protected>
 
-      {/* Alur asisten — Programmer 2 */}
+      {/* Alur asisten */}
       <Stack.Protected
         guard={isAssistant}
         redirectTo={isStudent ? '/student' : isLabAssistant ? '/aslab/index' : '/'}>

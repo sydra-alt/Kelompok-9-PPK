@@ -1,5 +1,3 @@
-/** Sprint 4 client contracts shared by the practikan billing screens. */
-
 export type FineStatus = 'pending' | 'paid';
 export type PaymentTransactionStatus = 'pending' | 'success' | 'failed';
 
@@ -39,17 +37,6 @@ export interface PaymentTransaction {
   paidAt: string | null;
   createdAt: string | null;
   updatedAt: string | null;
-}
-
-/** Response from `POST /api/attendance/submit`. */
-export interface AttendanceSubmissionResult {
-  attendanceId: string;
-  attendanceStatus: 'on_time' | 'late';
-  attendedAt: string;
-  lateMinutes: number;
-  distanceMeters: number;
-  fineId?: string;
-  fineAmount?: number;
 }
 
 /** Response from `POST /api/payments/create`. */

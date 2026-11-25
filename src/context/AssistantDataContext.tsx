@@ -61,7 +61,7 @@ import type {
 } from '@/types';
 
 /**
- * Provider data real-time khusus asisten (PIC: Programmer 2).
+ * Provider data real-time khusus asisten.
  *
  * Mengelola langganan Firestore real-time untuk:
  * - Kelas praktikum (`classes`) yang diampu asisten

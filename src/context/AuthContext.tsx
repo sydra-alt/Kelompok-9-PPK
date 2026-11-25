@@ -16,7 +16,7 @@ import { unregisterPushToken } from '@/services/notification-service';
 import type { UserProfile } from '@/types';
 
 /**
- * State autentikasi & profil pengguna aplikasi (PIC: Programmer 1).
+ * State autentikasi dan profil pengguna aplikasi.
  *
  * Siklus status:
  * - `config-missing`  : variabel env Firebase belum lengkap.
