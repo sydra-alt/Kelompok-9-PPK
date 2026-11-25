@@ -32,9 +32,12 @@ import {
   type CreateSessionInput,
 } from '@/services/assistant-data-service';
 import { getErrorMessage } from '@/services/errors';
+import type { PushDispatchResult } from '@/services/notification-service';
+import { subscribeLabs } from '@/services/student-data-service';
 import type {
   AttendanceRecord,
   ClassMembership,
+  Lab,
   PermissionRequest,
   PermissionStatus,
   PracticeClass,
@@ -55,6 +58,7 @@ import type {
 
 interface AssistantDataContextValue {
   classes: PracticeClass[];
+  labs: Lab[];
   sessions: PracticeSession[];
   attendance: AttendanceRecord[];
   permissionRequests: PermissionRequest[];
@@ -72,12 +76,12 @@ interface AssistantDataContextValue {
   addMember: (input: AddMemberInput) => Promise<string>;
   removeMember: (memberId: string) => Promise<void>;
   // CRUD Sesi & Status
-  createSession: (input: CreateSessionInput) => Promise<string>;
-  updateSession: (sessionId: string, updates: Partial<Omit<CreateSessionInput, 'classId'>>) => Promise<void>;
+  createSession: (input: CreateSessionInput) => Promise<{ id: string; notification: PushDispatchResult }>;
+  updateSession: (sessionId: string, updates: Partial<Omit<CreateSessionInput, 'classId'>>) => Promise<PushDispatchResult>;
   deleteSession: (sessionId: string) => Promise<void>;
-  setSessionStatus: (sessionId: string, status: SessionStatus) => Promise<void>;
+  setSessionStatus: (sessionId: string, status: SessionStatus) => Promise<PushDispatchResult | null>;
   // Keputusan Izin
-  decidePermission: (requestId: string, decision: PermissionStatus, note?: string) => Promise<void>;
+  decidePermission: (requestId: string, decision: PermissionStatus, note?: string) => Promise<PushDispatchResult>;
 }
 
 interface KeyedData<T> {
@@ -101,12 +105,13 @@ export function AssistantDataProvider({ children }: PropsWithChildren) {
   const assistantScopeKey = assistantUid ? `${assistantUid}:${retryKey}` : null;
 
   const [classesSnap, setClassesSnap] = useState<KeyedData<PracticeClass[]> | null>(null);
+  const [labsSnap, setLabsSnap] = useState<KeyedData<Lab[]> | null>(null);
   const [membersSnap, setMembersSnap] = useState<KeyedData<ClassMembership[]> | null>(null);
   const [sessionsSnap, setSessionsSnap] = useState<KeyedData<PracticeSession[]> | null>(null);
   const [attendanceSnap, setAttendanceSnap] = useState<KeyedData<AttendanceRecord[]> | null>(null);
   const [permissionsSnap, setPermissionsSnap] = useState<KeyedData<PermissionRequest[]> | null>(null);
 
-  // 1. Berlangganan kelas yang diampu asisten (jika belum ada, coba subscribe all classes)
+  // 1. Gabungkan kelas milik asisten dengan kelas legacy yang belum memiliki assistantIds.
   useEffect(() => {
     if (!assistantUid || !assistantScopeKey) return undefined;
 
@@ -117,38 +122,51 @@ export function AssistantDataProvider({ children }: PropsWithChildren) {
       });
     };
 
-    // Coba dengarkan kelas asisten; jika kosong atau asisten mengampu kelas
-    let unsubAll: (() => void) | null = null;
-    const unsubClasses = subscribeAssistantClasses(
+    let assignedClasses: PracticeClass[] = [];
+    let legacyClasses: PracticeClass[] = [];
+
+    const publishClasses = (fromCache: boolean) => {
+      const classesById = new Map<string, PracticeClass>();
+      for (const item of legacyClasses) classesById.set(item.id, item);
+      for (const item of assignedClasses) classesById.set(item.id, item);
+      const data = [...classesById.values()].sort((a, b) => a.name.localeCompare(b.name));
+      setClassesSnap({ key: assistantScopeKey, data, fromCache });
+    };
+
+    const unsubAll = subscribeAllClasses(
+      (data, meta) => {
+        // Pertahankan dokumen lama tanpa assistantIds saat kelas baru dibuat.
+        legacyClasses = data.filter((item) => item.assistantIds.length === 0);
+        publishClasses(meta.fromCache);
+      },
+      handleError,
+    );
+    const unsubAssigned = subscribeAssistantClasses(
       assistantUid,
       (data, meta) => {
-        if (data.length === 0) {
-          // Jika tidak ada kelas dengan assistantIds, dengarkan seluruh kelas
-          if (!unsubAll) {
-            unsubAll = subscribeAllClasses(
-              (allData, allMeta) => {
-                setClassesSnap({ key: assistantScopeKey, data: allData, fromCache: allMeta.fromCache });
-              },
-              () => {
-                setClassesSnap({ key: assistantScopeKey, data: [], fromCache: meta.fromCache });
-              },
-            );
-          }
-        } else {
-          if (unsubAll) {
-            unsubAll();
-            unsubAll = null;
-          }
-          setClassesSnap({ key: assistantScopeKey, data, fromCache: meta.fromCache });
-        }
+        assignedClasses = data;
+        publishClasses(meta.fromCache);
       },
       handleError,
     );
 
     return () => {
-      unsubClasses();
-      if (unsubAll) unsubAll();
+      unsubAll();
+      unsubAssigned();
     };
+  }, [assistantUid, assistantScopeKey]);
+
+  useEffect(() => {
+    if (!assistantUid || !assistantScopeKey) return undefined;
+
+    return subscribeLabs(
+      (data, meta) => setLabsSnap({ key: assistantScopeKey, data, fromCache: meta.fromCache }),
+      (error) =>
+        setErrorState({
+          key: assistantScopeKey,
+          message: getErrorMessage(error, 'Gagal memuat lokasi laboratorium dari Firestore.'),
+        }),
+    );
   }, [assistantUid, assistantScopeKey]);
 
   const classesLoaded = Boolean(assistantScopeKey && classesSnap?.key === assistantScopeKey);
@@ -156,6 +174,8 @@ export function AssistantDataProvider({ children }: PropsWithChildren) {
     () => (classesLoaded && classesSnap ? classesSnap.data : []),
     [classesLoaded, classesSnap],
   );
+  const labsLoaded = Boolean(assistantScopeKey && labsSnap?.key === assistantScopeKey);
+  const labs = useMemo(() => (labsLoaded && labsSnap ? labsSnap.data : []), [labsLoaded, labsSnap]);
 
   const classIdsKey = useMemo(
     () =>
@@ -263,6 +283,7 @@ export function AssistantDataProvider({ children }: PropsWithChildren) {
   const error = assistantScopeKey && errorState?.key === assistantScopeKey ? errorState.message : null;
   const fromCache = Boolean(
     (classesLoaded && classesSnap?.fromCache) ||
+      (labsLoaded && labsSnap?.fromCache) ||
       (sessionsLoaded && sessionsSnap?.fromCache) ||
       (attendanceLoaded && attendanceSnap?.fromCache) ||
       (permissionsLoaded && permissionsSnap?.fromCache),
@@ -272,6 +293,7 @@ export function AssistantDataProvider({ children }: PropsWithChildren) {
     assistantScopeKey &&
       !error &&
       (!classesLoaded ||
+        !labsLoaded ||
         !sessionsLoaded ||
         !attendanceLoaded ||
         !permissionsLoaded ||
@@ -336,6 +358,7 @@ export function AssistantDataProvider({ children }: PropsWithChildren) {
   const value = useMemo<AssistantDataContextValue>(
     () => ({
       classes,
+      labs,
       sessions,
       attendance,
       permissionRequests,
@@ -358,6 +381,7 @@ export function AssistantDataProvider({ children }: PropsWithChildren) {
     }),
     [
       classes,
+      labs,
       sessions,
       attendance,
       permissionRequests,

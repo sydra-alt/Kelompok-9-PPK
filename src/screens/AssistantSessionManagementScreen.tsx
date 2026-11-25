@@ -39,6 +39,7 @@ export default function AssistantSessionManagementScreen() {
 
   const {
     classes,
+    labs,
     sessions,
     attendance,
     setSessionStatus,
@@ -101,11 +102,11 @@ export default function AssistantSessionManagementScreen() {
     if (!session || !pendingAction) return;
     const nextStatus: SessionStatus = pendingAction === 'open' ? 'open' : 'closed';
     try {
-      await setSessionStatus(session.id, nextStatus);
+      const pushResult = await setSessionStatus(session.id, nextStatus);
       setFeedbackType('success');
       setFeedback(
         pendingAction === 'open'
-          ? 'Sesi berhasil dibuka. Praktikan sekarang dapat melakukan presensi secara real-time.'
+          ? `Sesi berhasil dibuka. Praktikan sekarang dapat melakukan presensi secara real-time. ${pushResult?.warning ?? `${pushResult?.acceptedCount ?? 0} notifikasi diterima antrean Expo.`}`
           : 'Sesi berhasil ditutup. Praktikan tidak dapat lagi melakukan presensi untuk sesi ini.',
       );
     } catch (err: unknown) {
@@ -268,11 +269,12 @@ export default function AssistantSessionManagementScreen() {
       <SessionFormModal
         visible={editModalVisible}
         classes={classes}
+        labs={labs}
         initialData={session}
         defaultAssistantName={assistantName}
         onClose={() => setEditModalVisible(false)}
         onSubmit={async (data) => {
-          await updateSession(session.id, {
+          const pushResult = await updateSession(session.id, {
             date: data.date,
             startTime: data.startTime,
             endTime: data.endTime,
@@ -281,9 +283,13 @@ export default function AssistantSessionManagementScreen() {
             assistantName: data.assistantName,
             practicalName: data.practicalName,
             className: data.className,
+            labId: data.labId,
+            labName: data.labName,
           });
           setFeedbackType('success');
-          setFeedback('Informasi sesi berhasil diperbarui.');
+          setFeedback(
+            `Informasi sesi berhasil diperbarui. ${pushResult.warning ?? `${pushResult.acceptedCount} notifikasi diterima antrean Expo.`}`,
+          );
         }}
       />
 

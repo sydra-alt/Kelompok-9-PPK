@@ -36,9 +36,12 @@ export const navigateTo = {
 
 export default function AppNavigator() {
   const { status, profile } = useAuth();
-  const isAuthenticated = status === 'authenticated' && Boolean(profile);
-  const isStudent = isAuthenticated && profile?.role === 'praktikan';
-  const isAssistant = isAuthenticated && profile?.role === 'asisten';
+  const role = profile?.role;
+  const isAuthenticated = status === 'authenticated' && Boolean(role);
+  const isStudent = isAuthenticated && role === 'praktikan';
+  const isAssistant = isAuthenticated && role === 'asisten';
+
+  const homeRoute = role === 'praktikan' ? '/student' : role === 'asisten' ? '/assistant' : '/';
 
   return (
     <Stack
@@ -51,26 +54,29 @@ export default function AppNavigator() {
         headerBackTitle: 'Kembali',
       }}>
       {/* Rute autentikasi — hanya aktif sebelum profil terautentikasi penuh */}
-      <Stack.Protected guard={!isAuthenticated}>
+      <Stack.Protected guard={!isAuthenticated} redirectTo={homeRoute}>
         <Stack.Screen name="index" options={{ headerShown: false }} />
         <Stack.Screen name="register" options={{ title: 'Registrasi Praktikan' }} />
       </Stack.Protected>
 
       {/* Alur praktikan — Programmer 1 */}
-      <Stack.Protected guard={isStudent}>
+      <Stack.Protected guard={isStudent} redirectTo={isAssistant ? '/assistant' : '/'}>
         <Stack.Screen
           name="student/index"
           options={{ title: 'Beranda Praktikan', headerBackVisible: false }}
         />
         <Stack.Screen name="student/session/[sessionId]" options={{ title: 'Detail Sesi' }} />
         <Stack.Screen name="student/attendance/[sessionId]" options={{ title: 'Presensi Lokasi' }} />
-        <Stack.Screen name="student/maps" options={{ title: 'Peta Laboratorium' }} />
+        <Stack.Screen
+          name="student/maps"
+          options={{ title: 'Peta Laboratorium', headerBackVisible: true }}
+        />
         <Stack.Screen name="student/history" options={{ title: 'Riwayat Kehadiran' }} />
         <Stack.Screen name="student/permissions" options={{ title: 'Pengajuan Izin' }} />
       </Stack.Protected>
 
       {/* Alur asisten — Programmer 2 */}
-      <Stack.Protected guard={isAssistant}>
+      <Stack.Protected guard={isAssistant} redirectTo={isStudent ? '/student' : '/'}>
         <Stack.Screen
           name="assistant/index"
           options={{ title: 'Dashboard Asisten', headerBackVisible: false }}

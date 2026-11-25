@@ -4,12 +4,13 @@ import { Modal, Pressable, StyleSheet, Text, TextInput, View } from 'react-nativ
 import { AppButton } from '@/components/AppButton';
 import { AppColors, Radius } from '@/constants/app-theme';
 import { Spacing } from '@/constants/theme';
-import type { PracticeClass } from '@/types';
+import type { PracticeClass, UserProfile } from '@/types';
 
 interface MemberFormModalProps {
   visible: boolean;
   targetClass: PracticeClass | null;
   onClose: () => void;
+  onLookup: (identifier: string) => Promise<UserProfile | null>;
   onSubmit: (data: {
     classId: string;
     className: string;
@@ -23,31 +24,47 @@ export function MemberFormModal({
   visible,
   targetClass,
   onClose,
+  onLookup,
   onSubmit,
 }: MemberFormModalProps) {
-  const [studentName, setStudentName] = useState('');
   const [studentIdentifier, setStudentIdentifier] = useState('');
-  const [studentId, setStudentId] = useState('');
+  const [matchedStudent, setMatchedStudent] = useState<UserProfile | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [lookupMessage, setLookupMessage] = useState<string | null>(null);
+  const [searching, setSearching] = useState(false);
   const [submitting, setSubmitting] = useState(false);
 
+  const handleLookup = async () => {
+    const nim = studentIdentifier.trim();
+    if (!nim) {
+      setError('Masukkan NIM praktikan terlebih dahulu.');
+      setMatchedStudent(null);
+      setLookupMessage(null);
+      return;
+    }
+
+    setSearching(true);
+    setError(null);
+    setLookupMessage(null);
+    setMatchedStudent(null);
+    try {
+      const result = await onLookup(nim);
+      if (result) {
+        setMatchedStudent(result);
+        setLookupMessage('Akun praktikan ditemukan. Pastikan nama dan NIM sesuai sebelum menambahkan.');
+      } else {
+        setLookupMessage('Akun praktikan dengan NIM ini tidak ditemukan. Pastikan praktikan sudah membuat akun.');
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Gagal mencari akun praktikan.');
+    } finally {
+      setSearching(false);
+    }
+  };
+
   const handleSubmit = async () => {
-    if (!targetClass) return;
-
-    const trimmedName = studentName.trim();
-    const trimmedNim = studentIdentifier.trim();
-    const trimmedUid = studentId.trim();
-
-    if (!trimmedName) {
-      setError('Nama lengkap praktikan wajib diisi.');
-      return;
-    }
-    if (!trimmedNim) {
-      setError('NIM praktikan wajib diisi.');
-      return;
-    }
-    if (!trimmedUid) {
-      setError('UID praktikan (Firebase Auth UID) wajib diisi.');
+    if (!targetClass || !matchedStudent) {
+      setError('Cari dan pilih akun praktikan terlebih dahulu.');
       return;
     }
 
@@ -57,13 +74,13 @@ export function MemberFormModal({
       await onSubmit({
         classId: targetClass.id,
         className: targetClass.name,
-        studentId: trimmedUid,
-        studentName: trimmedName,
-        studentIdentifier: trimmedNim,
+        studentId: matchedStudent.uid,
+        studentName: matchedStudent.name,
+        studentIdentifier: matchedStudent.identifier,
       });
-      setStudentName('');
       setStudentIdentifier('');
-      setStudentId('');
+      setMatchedStudent(null);
+      setLookupMessage(null);
       onClose();
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : 'Gagal menambahkan peserta.');
@@ -82,6 +99,7 @@ export function MemberFormModal({
       <View style={styles.backdrop}>
         <View style={styles.card} accessibilityViewIsModal>
           <Text style={styles.title}>Tambah Peserta Praktikum</Text>
+          <Text style={styles.subtitle}>Cari akun praktikan menggunakan NIM. UID akan dihubungkan otomatis.</Text>
           <Text style={styles.subtitle}>
             Kelas: <Text style={styles.bold}>{targetClass?.name}</Text> ({targetClass?.practicalName})
           </Text>
@@ -89,55 +107,45 @@ export function MemberFormModal({
           {error ? <Text style={styles.errorText}>{error}</Text> : null}
 
           <View style={styles.field}>
-            <Text style={styles.label}>Nama Praktikan</Text>
-            <TextInput
-              value={studentName}
-              editable={!submitting}
-              onChangeText={(text) => {
-                setStudentName(text);
-                setError(null);
-              }}
-              placeholder="Contoh: Ahmad Fauzan"
-              placeholderTextColor={AppColors.textMuted}
-              style={styles.input}
-            />
-          </View>
-
-          <View style={styles.field}>
             <Text style={styles.label}>NIM Praktikan</Text>
             <TextInput
               value={studentIdentifier}
-              editable={!submitting}
+              editable={!submitting && !searching}
               onChangeText={(text) => {
                 setStudentIdentifier(text);
+                setMatchedStudent(null);
+                setLookupMessage(null);
                 setError(null);
               }}
-              placeholder="Contoh: 2211102001"
-              placeholderTextColor={AppColors.textMuted}
-              style={styles.input}
-            />
-          </View>
-
-          <View style={styles.field}>
-            <Text style={styles.label}>UID Praktikan (Firebase Auth UID)</Text>
-            <TextInput
-              value={studentId}
-              editable={!submitting}
-              onChangeText={(text) => {
-                setStudentId(text);
-                setError(null);
-              }}
-              placeholder="Salin UID dari Firebase Auth / profil"
+              placeholder="Masukkan NIM praktikan"
               placeholderTextColor={AppColors.textMuted}
               autoCapitalize="none"
               style={styles.input}
             />
           </View>
 
+          <AppButton
+            title={searching ? 'Mencari...' : 'Cari Praktikan'}
+            variant="secondary"
+            onPress={() => void handleLookup()}
+            disabled={searching || submitting}
+            style={styles.lookupButton}
+          />
+
+          {lookupMessage ? (
+            <Text style={matchedStudent ? styles.successText : styles.hintText}>{lookupMessage}</Text>
+          ) : null}
+          {matchedStudent ? (
+            <View style={styles.matchCard}>
+              <Text style={styles.matchName}>{matchedStudent.name}</Text>
+              <Text style={styles.hintText}>NIM: {matchedStudent.identifier}</Text>
+            </View>
+          ) : null}
+
           <View style={styles.actions}>
             <Pressable
               onPress={onClose}
-              disabled={submitting}
+              disabled={submitting || searching}
               style={styles.cancelButton}
               accessibilityRole="button">
               <Text style={styles.cancelText}>Batal</Text>
@@ -145,7 +153,7 @@ export function MemberFormModal({
             <AppButton
               title={submitting ? 'Menyimpan...' : 'Tambah Peserta'}
               onPress={() => void handleSubmit()}
-              disabled={submitting}
+              disabled={submitting || searching || !matchedStudent}
               style={styles.submitButton}
             />
           </View>
@@ -192,6 +200,27 @@ const styles = StyleSheet.create({
     padding: Spacing.two,
     borderRadius: Radius.md,
   },
+  successText: {
+    color: AppColors.success,
+    fontSize: 13,
+    lineHeight: 19,
+  },
+  hintText: {
+    color: AppColors.textMuted,
+    fontSize: 13,
+    lineHeight: 19,
+  },
+  matchCard: {
+    padding: Spacing.three,
+    borderRadius: Radius.md,
+    backgroundColor: AppColors.successSoft,
+    gap: Spacing.one,
+  },
+  matchName: {
+    color: AppColors.text,
+    fontSize: 14,
+    fontWeight: '700',
+  },
   field: {
     gap: 6,
   },
@@ -215,6 +244,9 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: Spacing.two,
     marginTop: Spacing.two,
+  },
+  lookupButton: {
+    width: '100%',
   },
   cancelButton: {
     flex: 1,

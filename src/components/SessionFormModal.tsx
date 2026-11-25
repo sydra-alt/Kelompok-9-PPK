@@ -14,16 +14,19 @@ import {
 import { AppButton } from '@/components/AppButton';
 import { AppColors, Radius } from '@/constants/app-theme';
 import { Spacing } from '@/constants/theme';
-import type { PracticeClass, PracticeSession } from '@/types';
+import type { Lab, PracticeClass, PracticeSession } from '@/types';
 
 interface SessionFormModalProps {
   visible: boolean;
   classes: PracticeClass[];
+  labs: Lab[];
   initialData?: PracticeSession | null;
   defaultAssistantName?: string;
   onClose: () => void;
   onSubmit: (data: {
     classId: string;
+    labId: string;
+    labName: string;
     className: string;
     practicalName: string;
     date: string;
@@ -38,6 +41,7 @@ interface SessionFormModalProps {
 export function SessionFormModal({
   visible,
   classes,
+  labs,
   initialData,
   defaultAssistantName,
   onClose,
@@ -56,6 +60,7 @@ export function SessionFormModal({
         <SessionFormContent
           key={initialData?.id ?? 'new-session'}
           classes={classes}
+          labs={labs}
           initialData={initialData}
           defaultAssistantName={defaultAssistantName}
           onClose={onClose}
@@ -68,17 +73,21 @@ export function SessionFormModal({
 
 function SessionFormContent({
   classes,
+  labs,
   initialData,
   defaultAssistantName,
   onClose,
   onSubmit,
 }: {
   classes: PracticeClass[];
+  labs: Lab[];
   initialData?: PracticeSession | null;
   defaultAssistantName?: string;
   onClose: () => void;
   onSubmit: (data: {
     classId: string;
+    labId: string;
+    labName: string;
     className: string;
     practicalName: string;
     date: string;
@@ -98,11 +107,15 @@ function SessionFormContent({
   const [selectedClassId, setSelectedClassId] = useState(
     initialData?.classId ?? classes[0]?.id ?? '',
   );
+  const [preferredLabId, setPreferredLabId] = useState(initialData?.labId ?? labs[0]?.id ?? '');
+  const selectedLabId = labs.some((lab) => lab.id === preferredLabId)
+    ? preferredLabId
+    : labs[0]?.id ?? '';
   const [date, setDate] = useState(initialData?.date ?? todayDate);
   const [startTime, setStartTime] = useState(initialData?.startTime ?? '08:00');
   const [endTime, setEndTime] = useState(initialData?.endTime ?? '10:00');
   const [topic, setTopic] = useState(initialData?.topic ?? '');
-  const [room, setRoom] = useState(initialData?.room ?? 'Lab Komputer 1');
+  const [room, setRoom] = useState(initialData?.room ?? '');
   const [assistantName, setAssistantName] = useState(
     initialData?.assistantName ?? defaultAssistantName ?? '',
   );
@@ -111,8 +124,13 @@ function SessionFormContent({
 
   const handleSubmit = async () => {
     const selectedClass = classes.find((c) => c.id === selectedClassId);
+    const selectedLab = labs.find((lab) => lab.id === selectedLabId);
     if (!selectedClass && !initialData) {
       setError('Pilih kelas praktikum terlebih dahulu.');
+      return;
+    }
+    if (!selectedLab) {
+      setError('Pilih lokasi presensi yang tersedia di Firebase terlebih dahulu.');
       return;
     }
 
@@ -138,6 +156,8 @@ function SessionFormContent({
     try {
       await onSubmit({
         classId: selectedClass?.id ?? initialData?.classId ?? '',
+        labId: selectedLab.id,
+        labName: selectedLab.name,
         className: selectedClass?.name ?? initialData?.className ?? '',
         practicalName: selectedClass?.practicalName ?? initialData?.practicalName ?? 'Praktikum',
         date: trimmedDate,
@@ -174,7 +194,7 @@ function SessionFormContent({
 
           {!initialData ? (
             <View style={styles.field}>
-              <Text style={styles.label}>Pilih Kelas</Text>
+              <Text style={styles.label}>Pilih Kelas untuk Sesi</Text>
               {classes.length === 0 ? (
                 <Text style={styles.noClassesWarning}>
                   Belum ada kelas. Buat kelas terlebih dahulu.
@@ -186,7 +206,10 @@ function SessionFormContent({
                     return (
                       <Pressable
                         key={c.id}
+                        testID={`session-class-option-${c.id}`}
                         onPress={() => setSelectedClassId(c.id)}
+                        accessibilityRole="button"
+                        accessibilityState={{ selected }}
                         style={[styles.chip, selected && styles.chipSelected]}>
                         <Text style={[styles.chipText, selected && styles.chipTextSelected]}>
                           {c.name} — {c.practicalName}
@@ -198,6 +221,37 @@ function SessionFormContent({
               )}
             </View>
           ) : null}
+
+          <View style={styles.field}>
+            <Text style={styles.label}>Lokasi Presensi</Text>
+            <Text style={styles.fieldHint}>
+              Lokasi dan radius diambil dari dokumen laboratorium di Firebase.
+            </Text>
+            {labs.length === 0 ? (
+              <Text style={styles.noClassesWarning}>
+                Lokasi valid belum tersedia. Periksa koleksi `labs` dan aturan Firestore.
+              </Text>
+            ) : (
+              <View style={styles.chipRow}>
+                {labs.map((lab) => {
+                  const selected = lab.id === selectedLabId;
+                  return (
+                    <Pressable
+                      key={lab.id}
+                      testID={`session-lab-option-${lab.id}`}
+                      onPress={() => setPreferredLabId(lab.id)}
+                      accessibilityRole="button"
+                      accessibilityState={{ selected }}
+                      style={[styles.chip, selected && styles.chipSelected]}>
+                      <Text style={[styles.chipText, selected && styles.chipTextSelected]}>
+                        {lab.name}{lab.building ? ` · ${lab.building}` : ''} · radius {lab.radiusMeters} m
+                      </Text>
+                    </Pressable>
+                  );
+                })}
+              </View>
+            )}
+          </View>
 
           <View style={styles.field}>
             <Text style={styles.label}>Tanggal (YYYY-MM-DD)</Text>
@@ -258,12 +312,12 @@ function SessionFormContent({
           </View>
 
           <View style={styles.field}>
-            <Text style={styles.label}>Ruangan / Laboratorium</Text>
+            <Text style={styles.label}>Ruangan / Nomor Ruang (Opsional)</Text>
             <TextInput
               value={room}
               editable={!submitting}
               onChangeText={setRoom}
-              placeholder="Contoh: Lab Komputer 2"
+              placeholder="Contoh: Ruang 2"
               placeholderTextColor={AppColors.textMuted}
               style={styles.input}
             />
@@ -292,7 +346,12 @@ function SessionFormContent({
             <AppButton
               title={submitting ? 'Menyimpan...' : 'Simpan Sesi'}
               onPress={() => void handleSubmit()}
-              disabled={submitting || (!initialData && classes.length === 0)}
+              disabled={
+                submitting ||
+                labs.length === 0 ||
+                !selectedLabId ||
+                (!initialData && classes.length === 0)
+              }
               style={styles.submitButton}
             />
           </View>
@@ -345,6 +404,11 @@ const styles = StyleSheet.create({
     color: AppColors.warning,
     fontSize: 13,
     fontStyle: 'italic',
+  },
+  fieldHint: {
+    color: AppColors.textMuted,
+    fontSize: 12,
+    lineHeight: 17,
   },
   field: {
     gap: 6,
