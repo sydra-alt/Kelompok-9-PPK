@@ -1,14 +1,14 @@
-# Konfigurasi Environment & Kontrak Skema Firestore (Sprint 2)
+# Konfigurasi Environment & Kontrak Skema Firestore (Sprint 2 & Sprint 3)
 
-Dokumen ini menjadi acuan bersama antara **Programmer 1** (Autentikasi, Alur Praktikan, Presensi, Pengajuan Izin & AI Classifier) dan **Programmer 2** (Alur Asisten, CRUD, Keputusan Izin & Security Rules).
+Dokumen ini menjadi acuan bersama antara **Programmer 1** (Autentikasi, Alur Praktikan, Presensi Berbasis Lokasi, Peta Laboratorium, Penerimaan Notifikasi, Pengajuan Izin & AI Classifier) dan **Programmer 2** (Alur Asisten, CRUD Praktikum & Laboratorium, Manajemen Sesi, Rekap Lokasi, Keputusan Izin, Pengiriman Notifikasi & Security Rules).
 
 ---
 
-## 1. Variabel Konfigurasi Environment (`.env`)
+## 1. Variabel Konfigurasi Environment (`.env` & `.env.local`)
 
-Aplikasi membaca konfigurasi Firebase client dan API AI melalui variabel `EXPO_PUBLIC_*` di [`src/services/firebase/config.ts`](../src/services/firebase/config.ts).
+Aplikasi membaca konfigurasi Firebase client dan API AI melalui variabel `EXPO_PUBLIC_*` di [`src/services/firebase/config.ts`](../src/services/firebase/config.ts), serta key Google Maps Android melalui [`app.config.js`](../app.config.js).
 
-1. Salin [`.env.example`](../.env.example) menjadi `.env` di root proyek.
+1. Salin [`.env.example`](../.env.example) menjadi `.env` (dan isi `.env.local` untuk `GOOGLE_MAPS_API_KEY`) di root proyek.
 2. Isi variabel berikut:
 
 | Variabel | Wajib | Keterangan |
@@ -19,11 +19,14 @@ Aplikasi membaca konfigurasi Firebase client dan API AI melalui variabel `EXPO_P
 | `EXPO_PUBLIC_FIREBASE_STORAGE_BUCKET` | Opsional | `<project-id>.firebasestorage.app` |
 | `EXPO_PUBLIC_FIREBASE_MESSAGING_SENDER_ID` | Opsional | Nomor pengirim FCM/project number |
 | `EXPO_PUBLIC_FIREBASE_APP_ID` | Ya | App ID Web (`1:...:web:...`) |
+| `GOOGLE_MAPS_API_KEY` | Ya (Android) | Key Google Maps SDK for Android di `.env.local` untuk build/run native |
 | `EXPO_PUBLIC_AI_CLASSIFIER_URL` | Opsional | Endpoint HTTP POST API AI klasifikasi alasan izin dari pengajar |
 | `EXPO_PUBLIC_AI_CLASSIFIER_API_KEY` | Opsional | Bearer token API AI (jika dibutuhkan endpoint pengajar) |
 | `EXPO_PUBLIC_AI_CLASSIFIER_TIMEOUT_MS` | Opsional | Batas waktu request API AI dalam milidetik (default `10000`) |
+| `EXPO_PUBLIC_PUSH_DISPATCH_MODE` | Opsional | `client` (default, via Expo Push API) atau `server` (bila memakai Cloud Functions) |
+| `EXPO_PUBLIC_PUSH_SERVICE_URL` | Opsional | Endpoint pengiriman Expo Push API (default `https://exp.host/--/api/v2/push/send`) |
 
-> **Keamanan Repository:** Berkas `.env`, `google-services.json`, dan `GoogleService-Info.plist` telah dimasukkan ke [`.gitignore`](../.gitignore) agar tidak ikut ter-commit.
+> **Keamanan Repository:** Berkas `.env`, `.env*.local`, `google-services.json`, dan `GoogleService-Info.plist` telah dimasukkan ke [`.gitignore`](../.gitignore) agar tidak ikut ter-commit.
 
 ---
 
@@ -137,9 +140,36 @@ Pengajuan izin praktikan untuk sesi tertentu. ID dokumen deterministik: `permiss
 ## 4. Kontrak Service Layer
 
 Seluruh kode layar tidak memanggil SDK Firestore secara langsung, melainkan melalui:
+
+### Programmer 1 (Praktikan, Autentikasi & Device Runtime)
 - [`src/services/auth-service.ts`](../src/services/auth-service.ts) — login, registrasi praktikan, reset sandi, logout, dan listener profil `users/{uid}`.
-- [`src/services/student-data-service.ts`](../src/services/student-data-service.ts) — listener real-time keanggotaan kelas, kelas, peserta, sesi, presensi, dan pengajuan izin milik praktikan.
-- [`src/services/attendance-service.ts`](../src/services/attendance-service.ts) — validasi status sesi dan transaksi presensi anti-duplikat.
+- [`src/services/student-data-service.ts`](../src/services/student-data-service.ts) — listener real-time keanggotaan kelas, kelas, peserta, laboratorium, sesi, presensi, dan pengajuan izin milik praktikan.
+- [`src/services/attendance-service.ts`](../src/services/attendance-service.ts) — validasi status sesi, cek radius laboratorium (Haversine via [`src/utils/distance.ts`](../src/utils/distance.ts)), dan transaksi presensi anti-duplikat.
+- [`src/services/location-service.ts`](../src/services/location-service.ts) — permintaan izin lokasi foreground, pembacaan koordinat GPS terkini, serta pemantauan posisi untuk Peta Lab.
+- [`src/services/notification-service.ts`](../src/services/notification-service.ts) — pendaftaran & pembersihan Expo Push Token di `users/{uid}.pushTokens`.
 - [`src/services/permission-service.ts`](../src/services/permission-service.ts) — validasi alasan, transaksi pembuatan pengajuan izin (`pending`), dan pembaruan hasil klasifikasi AI.
 - [`src/services/ai-classifier.ts`](../src/services/ai-classifier.ts) — pemanggilan HTTP ke API AI dari pengajar dengan timeout & fallback aman.
+
+### Programmer 2 (Asisten, Laboratorium, Push Dispatch & Security Rules)
+- [`src/services/assistant-data-service.ts`](../src/services/assistant-data-service.ts) — listener real-time dan CRUD kelas, peserta, sesi (beserta relasi `labId`/`labName`), pembukaan/penutupan sesi, rekap presensi, dan keputusan izin.
+- [`src/services/lab-service.ts`](../src/services/lab-service.ts) — listener real-time dan CRUD koleksi `labs` beserta validasi rentang koordinat dan radius.
+- [`src/services/notification-dispatch-service.ts`](../src/services/notification-dispatch-service.ts) — pemicu & pengiriman push notification non-blocking untuk event `session_opened`, `schedule_changed`, serta `permission_approved`/`permission_rejected`.
+
+---
+
+## 5. Ringkasan Firebase Security Rules (`firestore.rules`)
+
+Aturan akses lengkap didefinisikan di [`firestore.rules`](../firestore.rules):
+- **Akses Publik Ditolak:** Seluruh koleksi membutuhkan `request.auth != null && request.auth.uid != null`.
+- **`users/{uid}`:** Hanya pemilik (`request.auth.uid == uid`) atau asisten berwenang yang boleh membaca profil & `pushTokens`. Registrasi hanya boleh menetapkan `role: 'praktikan'`; pembaruan oleh pemilik dibatasi pada profil & `pushTokens` tanpa perubahan `role` atau `uid`.
+- **`labs/{labId}`:** Terbaca oleh pengguna terautentikasi; tambah/ubah/hapus hanya oleh asisten berwenang dengan validasi koordinat `[-90, 90]` / `[-180, 180]` dan `radiusMeters` `(0, 10000]`.
+- **`classes/{classId}` & `classMembers/{memberId}`:** Terbaca oleh pengguna terautentikasi; CRUD hanya oleh asisten berwenang.
+- **`sessions/{sessionId}`:** Terbaca oleh pengguna terautentikasi; tambah, ubah jadwal/lab (`labId`, `labName`), ubah status (`scheduled`/`open`/`closed`), dan hapus hanya oleh asisten berwenang.
+- **`attendance/{sessionId}_{uid}`:** Asisten membaca semua presensi; praktikan hanya membaca miliknya. Praktikan hanya dapat `create` dengan ID deterministik saat sesi berstatus `open`, `labId` valid, dan metadata `latitude`, `longitude`, serta `distanceMeters <= lab.radiusMeters`. Operasi `update` selalu ditolak (`false`).
+- **`permissionRequests/{sessionId}_{uid}`:** Asisten membaca semua izin dan memutuskan `approved`/`rejected` dengan mencatat `decidedBy == request.auth.uid`. Praktikan hanya membuat izin atas namanya sendiri (`status: 'pending'`) dan hanya boleh memperbarui field `aiClassification` & `updatedAt` selama masih `pending`.
+
+Deploy aturan ke Firebase Project dengan Firebase CLI:
+```bash
+firebase deploy --only firestore:rules
+```
 

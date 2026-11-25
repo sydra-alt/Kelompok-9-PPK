@@ -15,6 +15,7 @@ import { ConfirmDeleteModal } from '@/components/ConfirmDeleteModal';
 import { ConnectionBanner } from '@/components/ConnectionBanner';
 import { EmptyState } from '@/components/EmptyState';
 import { FeedbackBanner, type FeedbackType } from '@/components/FeedbackBanner';
+import { LabFormModal } from '@/components/LabFormModal';
 import { LoadingState } from '@/components/LoadingState';
 import { MemberFormModal } from '@/components/MemberFormModal';
 import { PermissionDecisionModal } from '@/components/PermissionDecisionModal';
@@ -27,7 +28,10 @@ import { useAssistantData } from '@/context/AssistantDataContext';
 import { useAuth } from '@/context/AuthContext';
 import { getUserById } from '@/data/users';
 import { navigateTo } from '@/navigation/AppNavigator';
+import { getErrorMessage } from '@/services/errors';
+import { buildNotificationFeedback } from '@/services/notification-dispatch-service';
 import type {
+  Lab,
   PermissionRequest,
   PermissionStatus,
   PracticeClass,
@@ -36,7 +40,7 @@ import type {
 } from '@/types';
 import { formatDate, getInitials } from '@/utils/format';
 
-type Tab = 'sessions' | 'permissions' | 'classes';
+type Tab = 'sessions' | 'permissions' | 'classes' | 'labs';
 type SessionFilter = 'all' | SessionStatus;
 type PermissionFilter = 'all' | PermissionStatus;
 
@@ -72,6 +76,7 @@ export default function AssistantHomeScreen() {
 
   const {
     classes,
+    labs,
     sessions,
     attendance,
     permissionRequests,
@@ -84,9 +89,13 @@ export default function AssistantHomeScreen() {
     createClass,
     updateClass,
     deleteClass,
+    createLab,
+    updateLab,
+    deleteLab,
     addMember,
     removeMember,
     createSession,
+    updateSession,
     deleteSession,
     setSessionStatus,
     decidePermission,
@@ -101,7 +110,11 @@ export default function AssistantHomeScreen() {
   const [classModalVisible, setClassModalVisible] = useState(false);
   const [editingClass, setEditingClass] = useState<PracticeClass | null>(null);
 
+  const [labModalVisible, setLabModalVisible] = useState(false);
+  const [editingLab, setEditingLab] = useState<Lab | null>(null);
+
   const [sessionModalVisible, setSessionModalVisible] = useState(false);
+  const [editingSession, setEditingSession] = useState<PracticeSession | null>(null);
 
   const [memberModalVisible, setMemberModalVisible] = useState(false);
   const [targetMemberClass, setTargetMemberClass] = useState<PracticeClass | null>(null);
@@ -157,20 +170,19 @@ export default function AssistantHomeScreen() {
     if (!toggleStatusModal) return;
     const { session, nextStatus } = toggleStatusModal;
     try {
-      await setSessionStatus(session.id, nextStatus);
-      setFeedback({
-        type: 'success',
-        title: 'Status sesi berhasil diperbarui',
-        message:
-          nextStatus === 'open'
-            ? `Sesi ${session.practicalName} (${session.className}) berhasil dibuka. Praktikan dapat melakukan presensi.`
-            : `Sesi ${session.practicalName} (${session.className}) berhasil ditutup. Presensi dinonaktifkan.`,
-      });
+      const notifResult = await setSessionStatus(session.id, nextStatus);
+      const baseMessage =
+        nextStatus === 'open'
+          ? `Sesi ${session.practicalName} (${session.className}) berhasil dibuka. Praktikan dapat melakukan presensi.`
+          : `Sesi ${session.practicalName} (${session.className}) berhasil ditutup. Presensi dinonaktifkan.`;
+      setFeedback(
+        buildNotificationFeedback('Status sesi berhasil diperbarui', baseMessage, notifResult),
+      );
     } catch (err: unknown) {
       setFeedback({
         type: 'error',
         title: 'Gagal memperbarui status sesi',
-        message: err instanceof Error ? err.message : 'Terjadi kesalahan.',
+        message: getErrorMessage(err, 'Terjadi kesalahan saat memperbarui status sesi.'),
       });
     } finally {
       setToggleStatusModal(null);
@@ -192,20 +204,20 @@ export default function AssistantHomeScreen() {
         title: 'Berhasil dihapus',
         message: 'Data berhasil dihapus dari server.',
       });
-      setDeleteModalVisible(false);
     } catch (err: unknown) {
       setFeedback({
         type: 'error',
         title: 'Gagal menghapus',
-        message: err instanceof Error ? err.message : 'Gagal menghapus data.',
+        message: getErrorMessage(err, 'Gagal menghapus data.'),
       });
     } finally {
       setDeleting(false);
+      setDeleteModalVisible(false);
       setDeleteConfig(null);
     }
   };
 
-  if (loading && sessions.length === 0 && classes.length === 0) {
+  if (loading && sessions.length === 0 && classes.length === 0 && labs.length === 0) {
     return (
       <View style={styles.loadingContainer}>
         <LoadingState
@@ -289,8 +301,9 @@ export default function AssistantHomeScreen() {
                 onPress={() => setActiveTab('sessions')}
                 style={[styles.tabItem, activeTab === 'sessions' && styles.tabItemActive]}>
                 <Text
+                  numberOfLines={1}
                   style={[styles.tabLabel, activeTab === 'sessions' && styles.tabLabelActive]}>
-                  Sesi Praktikum ({sessions.length})
+                  Sesi ({sessions.length})
                 </Text>
               </Pressable>
 
@@ -298,8 +311,9 @@ export default function AssistantHomeScreen() {
                 onPress={() => setActiveTab('permissions')}
                 style={[styles.tabItem, activeTab === 'permissions' && styles.tabItemActive]}>
                 <Text
+                  numberOfLines={1}
                   style={[styles.tabLabel, activeTab === 'permissions' && styles.tabLabelActive]}>
-                  Keputusan Izin
+                  Izin
                 </Text>
                 {pendingPermissionsCount > 0 ? (
                   <View style={styles.tabBadge}>
@@ -312,8 +326,19 @@ export default function AssistantHomeScreen() {
                 onPress={() => setActiveTab('classes')}
                 style={[styles.tabItem, activeTab === 'classes' && styles.tabItemActive]}>
                 <Text
+                  numberOfLines={1}
                   style={[styles.tabLabel, activeTab === 'classes' && styles.tabLabelActive]}>
-                  Kelas & Peserta ({classes.length})
+                  Kelas ({classes.length})
+                </Text>
+              </Pressable>
+
+              <Pressable
+                onPress={() => setActiveTab('labs')}
+                style={[styles.tabItem, activeTab === 'labs' && styles.tabItemActive]}>
+                <Text
+                  numberOfLines={1}
+                  style={[styles.tabLabel, activeTab === 'labs' && styles.tabLabelActive]}>
+                  Lab ({labs.length})
                 </Text>
               </Pressable>
             </View>
@@ -322,14 +347,17 @@ export default function AssistantHomeScreen() {
             {activeTab === 'sessions' ? (
               <View style={styles.section}>
                 <View style={styles.sectionHeaderRow}>
-                  <View>
+                  <View style={styles.sectionHeaderCopy}>
                     <Text style={styles.sectionTitle}>Jadwal Sesi Praktikum</Text>
                     <Text style={styles.sectionSubtitle}>
-                      Buka sesi agar praktikan dapat presensi.
+                      Tautkan sesi ke laboratorium dan buka saat praktikum dimulai.
                     </Text>
                   </View>
                   <Pressable
-                    onPress={() => setSessionModalVisible(true)}
+                    onPress={() => {
+                      setEditingSession(null);
+                      setSessionModalVisible(true);
+                    }}
                     style={styles.addButton}
                     accessibilityRole="button">
                     <Text style={styles.addButtonText}>+ Sesi Baru</Text>
@@ -359,7 +387,10 @@ export default function AssistantHomeScreen() {
                     title="Belum Ada Sesi Praktikum"
                     message="Belum ada sesi praktikum yang dijadwalkan. Klik '+ Sesi Baru' untuk membuat sesi."
                     actionLabel="+ Buat Sesi Baru"
-                    onAction={() => setSessionModalVisible(true)}
+                    onAction={() => {
+                      setEditingSession(null);
+                      setSessionModalVisible(true);
+                    }}
                   />
                 ) : (
                   <View style={styles.sessionList}>
@@ -383,6 +414,16 @@ export default function AssistantHomeScreen() {
                                   👥 {presentCount} praktikan hadir
                                 </Text>
                                 <View style={styles.sessionActions}>
+                                  <Pressable
+                                    onPress={() => {
+                                      setEditingSession(session);
+                                      setSessionModalVisible(true);
+                                    }}
+                                    style={styles.editPillButton}
+                                    accessibilityRole="button">
+                                    <Text style={styles.editPillText}>Edit</Text>
+                                  </Pressable>
+
                                   <Pressable
                                     onPress={() => handleOpenToggleSession(session)}
                                     style={[
@@ -638,6 +679,113 @@ export default function AssistantHomeScreen() {
                 )}
               </View>
             ) : null}
+
+            {/* TAB CONTENT: LABORATORIUM (SPRINT 3) */}
+            {activeTab === 'labs' ? (
+              <View style={styles.section}>
+                <View style={styles.sectionHeaderRow}>
+                  <View style={styles.sectionHeaderCopy}>
+                    <Text style={styles.sectionTitle}>Lokasi Laboratorium</Text>
+                    <Text style={styles.sectionSubtitle}>
+                      Acuan validasi radius presensi &amp; marker peta real-time.
+                    </Text>
+                  </View>
+                  <Pressable
+                    onPress={() => {
+                      setEditingLab(null);
+                      setLabModalVisible(true);
+                    }}
+                    style={styles.addButton}
+                    accessibilityRole="button">
+                    <Text style={styles.addButtonText}>+ Lab Baru</Text>
+                  </Pressable>
+                </View>
+
+                {labs.length === 0 ? (
+                  <EmptyState
+                    icon="📍"
+                    title="Belum Ada Laboratorium"
+                    message="Tambahkan lokasi laboratorium beserta koordinat dan radius validasi agar presensi lokasi & peta dapat digunakan."
+                    actionLabel="+ Tambah Lab"
+                    onAction={() => {
+                      setEditingLab(null);
+                      setLabModalVisible(true);
+                    }}
+                  />
+                ) : (
+                  <View style={styles.classList}>
+                    {labs.map((lab) => {
+                      const linkedSessions = sessions.filter((s) => s.labId === lab.id);
+                      const openLinkedCount = linkedSessions.filter(
+                        (s) => s.status === 'open',
+                      ).length;
+
+                      return (
+                        <View key={lab.id} style={styles.classCard}>
+                          <View style={styles.classHeader}>
+                            <View style={styles.classTitleBlock}>
+                              <Text style={styles.classNameText}>{lab.name}</Text>
+                              <Text style={styles.classPracticalText}>
+                                {lab.building
+                                  ? `${lab.building} • Radius ${lab.radiusMeters} m`
+                                  : `Radius presensi ${lab.radiusMeters} m`}
+                              </Text>
+                            </View>
+                            <View style={styles.classActions}>
+                              <Pressable
+                                onPress={() => {
+                                  setEditingLab(lab);
+                                  setLabModalVisible(true);
+                                }}
+                                style={styles.editClassButton}
+                                accessibilityRole="button">
+                                <Text style={styles.editClassText}>Edit</Text>
+                              </Pressable>
+                              <Pressable
+                                onPress={() =>
+                                  handleDeleteItem(
+                                    'Hapus Laboratorium?',
+                                    linkedSessions.length > 0
+                                      ? `Laboratorium "${lab.name}" masih tertaut ke ${linkedSessions.length} sesi praktikum. Presensi lokasi pada sesi terkait akan gagal jika lab ini dihapus.`
+                                      : `Apakah Anda yakin ingin menghapus laboratorium "${lab.name}"?`,
+                                    () => deleteLab(lab.id),
+                                  )
+                                }
+                                style={styles.deleteClassButton}
+                                accessibilityRole="button">
+                                <Text style={styles.deleteClassText}>Hapus</Text>
+                              </Pressable>
+                            </View>
+                          </View>
+
+                          <View style={styles.labMetaBlock}>
+                            <Text style={styles.labCoordText}>
+                              Koordinat: {lab.latitude.toFixed(6)}, {lab.longitude.toFixed(6)}
+                            </Text>
+                            {lab.description ? (
+                              <Text style={styles.labDescText}>{lab.description}</Text>
+                            ) : null}
+                            <View style={styles.labBadgesRow}>
+                              <View style={styles.labRadiusBadge}>
+                                <Text style={styles.labRadiusBadgeText}>
+                                  📏 Radius {lab.radiusMeters} m
+                                </Text>
+                              </View>
+                              <View style={styles.labSessionsBadge}>
+                                <Text style={styles.labSessionsBadgeText}>
+                                  🗓️ {linkedSessions.length} sesi tertaut
+                                  {openLinkedCount > 0 ? ` • ${openLinkedCount} dibuka` : ''}
+                                </Text>
+                              </View>
+                            </View>
+                          </View>
+                        </View>
+                      );
+                    })}
+                  </View>
+                )}
+              </View>
+            ) : null}
           </View>
         }
         renderItem={() => null}
@@ -670,18 +818,71 @@ export default function AssistantHomeScreen() {
         }}
       />
 
+      <LabFormModal
+        visible={labModalVisible}
+        initialData={editingLab}
+        onClose={() => {
+          setLabModalVisible(false);
+          setEditingLab(null);
+        }}
+        onSubmit={async (data) => {
+          if (editingLab) {
+            await updateLab(editingLab.id, data);
+            setFeedback({
+              type: 'success',
+              title: 'Laboratorium diperbarui',
+              message: `Data "${data.name}" (radius ${Math.round(data.radiusMeters)} m) berhasil diperbarui.`,
+            });
+          } else {
+            await createLab(data);
+            setFeedback({
+              type: 'success',
+              title: 'Laboratorium ditambahkan',
+              message: `"${data.name}" siap dipakai sebagai acuan presensi lokasi & marker peta.`,
+            });
+          }
+        }}
+      />
+
       <SessionFormModal
         visible={sessionModalVisible}
         classes={classes}
+        labs={labs}
+        initialData={editingSession}
         defaultAssistantName={assistantName}
-        onClose={() => setSessionModalVisible(false)}
+        onClose={() => {
+          setSessionModalVisible(false);
+          setEditingSession(null);
+        }}
         onSubmit={async (data) => {
-          await createSession(data);
-          setFeedback({
-            type: 'success',
-            title: 'Sesi praktikum dijadwalkan',
-            message: `Sesi ${data.practicalName} (${data.className}) berhasil dibuat.`,
-          });
+          if (editingSession) {
+            const notifResult = await updateSession(editingSession.id, {
+              practicalName: data.practicalName,
+              className: data.className,
+              labId: data.labId,
+              labName: data.labName,
+              date: data.date,
+              startTime: data.startTime,
+              endTime: data.endTime,
+              topic: data.topic,
+              room: data.room,
+              assistantName: data.assistantName,
+            });
+            setFeedback(
+              buildNotificationFeedback(
+                'Jadwal sesi diperbarui',
+                `Sesi ${data.practicalName} (${data.className}) berhasil diperbarui.`,
+                notifResult,
+              ),
+            );
+          } else {
+            await createSession(data);
+            setFeedback({
+              type: 'success',
+              title: 'Sesi praktikum dijadwalkan',
+              message: `Sesi ${data.practicalName} (${data.className}) di ${data.labName} berhasil dibuat.`,
+            });
+          }
         }}
       />
 
@@ -710,12 +911,14 @@ export default function AssistantHomeScreen() {
           setSelectedPermission(null);
         }}
         onDecide={async (requestId, decision, note) => {
-          await decidePermission(requestId, decision, note);
-          setFeedback({
-            type: 'success',
-            title: 'Keputusan izin tersimpan',
-            message: `Pengajuan izin berhasil ${decision === 'approved' ? 'disetujui' : 'ditolak'}.`,
-          });
+          const notifResult = await decidePermission(requestId, decision, note);
+          setFeedback(
+            buildNotificationFeedback(
+              'Keputusan izin tersimpan',
+              `Pengajuan izin berhasil ${decision === 'approved' ? 'disetujui' : 'ditolak'}.`,
+              notifResult,
+            ),
+          );
         }}
       />
 
@@ -875,6 +1078,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     paddingVertical: 10,
+    paddingHorizontal: 4,
     borderRadius: Radius.md,
     gap: 4,
   },
@@ -882,7 +1086,7 @@ const styles = StyleSheet.create({
     backgroundColor: AppColors.primary,
   },
   tabLabel: {
-    fontSize: 12,
+    fontSize: 11.5,
     fontWeight: '700',
     color: AppColors.textMuted,
   },
@@ -908,6 +1112,10 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
+    gap: Spacing.two,
+  },
+  sectionHeaderCopy: {
+    flex: 1,
   },
   sectionTitle: {
     color: AppColors.text,
@@ -966,8 +1174,10 @@ const styles = StyleSheet.create({
     borderTopColor: AppColors.border,
     paddingTop: Spacing.two,
     flexDirection: 'row',
+    flexWrap: 'wrap',
     justifyContent: 'space-between',
     alignItems: 'center',
+    gap: Spacing.two,
   },
   attendanceSummary: {
     color: AppColors.textMuted,
@@ -977,7 +1187,20 @@ const styles = StyleSheet.create({
   sessionActions: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: Spacing.two,
+    gap: Spacing.one + 2,
+  },
+  editPillButton: {
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: Radius.pill,
+    borderWidth: 1,
+    borderColor: AppColors.border,
+    backgroundColor: AppColors.background,
+  },
+  editPillText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: AppColors.text,
   },
   actionPill: {
     paddingHorizontal: 10,
@@ -1216,5 +1439,51 @@ const styles = StyleSheet.create({
     color: AppColors.danger,
     fontSize: 12,
     fontWeight: '800',
+  },
+  labMetaBlock: {
+    borderTopWidth: 1,
+    borderTopColor: AppColors.border,
+    paddingTop: Spacing.two,
+    gap: 6,
+  },
+  labCoordText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: AppColors.text,
+  },
+  labDescText: {
+    fontSize: 12,
+    color: AppColors.textMuted,
+    lineHeight: 17,
+  },
+  labBadgesRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: Spacing.one + 2,
+    marginTop: 2,
+  },
+  labRadiusBadge: {
+    backgroundColor: AppColors.primarySoft,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: Radius.pill,
+  },
+  labRadiusBadgeText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: AppColors.primaryDark,
+  },
+  labSessionsBadge: {
+    backgroundColor: AppColors.background,
+    borderWidth: 1,
+    borderColor: AppColors.border,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: Radius.pill,
+  },
+  labSessionsBadgeText: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: AppColors.textMuted,
   },
 });

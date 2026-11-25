@@ -14,30 +14,39 @@ import {
 import { AppButton } from '@/components/AppButton';
 import { AppColors, Radius } from '@/constants/app-theme';
 import { Spacing } from '@/constants/theme';
-import type { PracticeClass, PracticeSession } from '@/types';
+import type { Lab, PracticeClass, PracticeSession } from '@/types';
+
+const DATE_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
+const TIME_PATTERN = /^([01]\d|2[0-3]):[0-5]\d$/;
+
+export interface SessionFormValues {
+  classId: string;
+  className: string;
+  practicalName: string;
+  labId: string;
+  labName: string;
+  date: string;
+  startTime: string;
+  endTime: string;
+  topic?: string;
+  room?: string;
+  assistantName?: string;
+}
 
 interface SessionFormModalProps {
   visible: boolean;
   classes: PracticeClass[];
+  labs: Lab[];
   initialData?: PracticeSession | null;
   defaultAssistantName?: string;
   onClose: () => void;
-  onSubmit: (data: {
-    classId: string;
-    className: string;
-    practicalName: string;
-    date: string;
-    startTime: string;
-    endTime: string;
-    topic?: string;
-    room?: string;
-    assistantName?: string;
-  }) => Promise<void>;
+  onSubmit: (data: SessionFormValues) => Promise<void>;
 }
 
 export function SessionFormModal({
   visible,
   classes,
+  labs,
   initialData,
   defaultAssistantName,
   onClose,
@@ -56,6 +65,7 @@ export function SessionFormModal({
         <SessionFormContent
           key={initialData?.id ?? 'new-session'}
           classes={classes}
+          labs={labs}
           initialData={initialData}
           defaultAssistantName={defaultAssistantName}
           onClose={onClose}
@@ -68,26 +78,18 @@ export function SessionFormModal({
 
 function SessionFormContent({
   classes,
+  labs,
   initialData,
   defaultAssistantName,
   onClose,
   onSubmit,
 }: {
   classes: PracticeClass[];
+  labs: Lab[];
   initialData?: PracticeSession | null;
   defaultAssistantName?: string;
   onClose: () => void;
-  onSubmit: (data: {
-    classId: string;
-    className: string;
-    practicalName: string;
-    date: string;
-    startTime: string;
-    endTime: string;
-    topic?: string;
-    room?: string;
-    assistantName?: string;
-  }) => Promise<void>;
+  onSubmit: (data: SessionFormValues) => Promise<void>;
 }) {
   const today = new Date();
   const yyyy = today.getFullYear();
@@ -98,16 +100,28 @@ function SessionFormContent({
   const [selectedClassId, setSelectedClassId] = useState(
     initialData?.classId ?? classes[0]?.id ?? '',
   );
+  const initialLabId = initialData?.labId ?? labs[0]?.id ?? '';
+  const initialLab = labs.find((l) => l.id === initialLabId) ?? labs[0];
+  const [selectedLabId, setSelectedLabId] = useState(initialLabId);
   const [date, setDate] = useState(initialData?.date ?? todayDate);
   const [startTime, setStartTime] = useState(initialData?.startTime ?? '08:00');
   const [endTime, setEndTime] = useState(initialData?.endTime ?? '10:00');
   const [topic, setTopic] = useState(initialData?.topic ?? '');
-  const [room, setRoom] = useState(initialData?.room ?? 'Lab Komputer 1');
+  const [room, setRoom] = useState(initialData?.room ?? initialLab?.name ?? '');
   const [assistantName, setAssistantName] = useState(
     initialData?.assistantName ?? defaultAssistantName ?? '',
   );
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
+
+  const handleSelectLab = (nextLab: Lab) => {
+    const previousLab = labs.find((l) => l.id === selectedLabId);
+    setSelectedLabId(nextLab.id);
+    setError(null);
+    if (!room.trim() || (previousLab && room.trim() === previousLab.name)) {
+      setRoom(nextLab.name);
+    }
+  };
 
   const handleSubmit = async () => {
     const selectedClass = classes.find((c) => c.id === selectedClassId);
@@ -116,16 +130,26 @@ function SessionFormContent({
       return;
     }
 
+    const selectedLab = labs.find((l) => l.id === selectedLabId);
+    if (!selectedLab) {
+      setError('Pilih laboratorium pelaksanaan praktikum terlebih dahulu.');
+      return;
+    }
+
     const trimmedDate = date.trim();
     const trimmedStart = startTime.trim();
     const trimmedEnd = endTime.trim();
 
-    if (!trimmedDate) {
-      setError('Tanggal praktikum wajib diisi (YYYY-MM-DD).');
+    if (!trimmedDate || !DATE_PATTERN.test(trimmedDate)) {
+      setError('Tanggal praktikum wajib diisi dengan format YYYY-MM-DD.');
       return;
     }
-    if (!trimmedStart || !trimmedEnd) {
-      setError('Waktu mulai dan selesai wajib diisi (HH:mm).');
+    if (!trimmedStart || !TIME_PATTERN.test(trimmedStart)) {
+      setError('Waktu mulai wajib diisi dengan format HH:mm (mis. 08:00).');
+      return;
+    }
+    if (!trimmedEnd || !TIME_PATTERN.test(trimmedEnd)) {
+      setError('Waktu selesai wajib diisi dengan format HH:mm (mis. 10:00).');
       return;
     }
     if (trimmedStart >= trimmedEnd) {
@@ -140,11 +164,13 @@ function SessionFormContent({
         classId: selectedClass?.id ?? initialData?.classId ?? '',
         className: selectedClass?.name ?? initialData?.className ?? '',
         practicalName: selectedClass?.practicalName ?? initialData?.practicalName ?? 'Praktikum',
+        labId: selectedLab.id,
+        labName: selectedLab.name,
         date: trimmedDate,
         startTime: trimmedStart,
         endTime: trimmedEnd,
         topic: topic.trim() || undefined,
-        room: room.trim() || undefined,
+        room: room.trim() || selectedLab.name,
         assistantName: assistantName.trim() || defaultAssistantName,
       });
       onClose();
@@ -258,12 +284,38 @@ function SessionFormContent({
           </View>
 
           <View style={styles.field}>
-            <Text style={styles.label}>Ruangan / Laboratorium</Text>
+            <Text style={styles.label}>Pilih Laboratorium (Wajib untuk Presensi Lokasi)</Text>
+            {labs.length === 0 ? (
+              <Text style={styles.noClassesWarning}>
+                Belum ada laboratorium. Tambahkan laboratorium di tab Lab terlebih dahulu.
+              </Text>
+            ) : (
+              <View style={styles.chipRow}>
+                {labs.map((lab) => {
+                  const selected = lab.id === selectedLabId;
+                  return (
+                    <Pressable
+                      key={lab.id}
+                      onPress={() => handleSelectLab(lab)}
+                      style={[styles.chip, selected && styles.chipSelected]}>
+                      <Text style={[styles.chipText, selected && styles.chipTextSelected]}>
+                        {lab.name}
+                        {lab.building ? ` (${lab.building})` : ''} • {lab.radiusMeters} m
+                      </Text>
+                    </Pressable>
+                  );
+                })}
+              </View>
+            )}
+          </View>
+
+          <View style={styles.field}>
+            <Text style={styles.label}>Keterangan Ruangan (Opsional)</Text>
             <TextInput
               value={room}
               editable={!submitting}
               onChangeText={setRoom}
-              placeholder="Contoh: Lab Komputer 2"
+              placeholder="Contoh: Lab Komputer 2 / Gedung E"
               placeholderTextColor={AppColors.textMuted}
               style={styles.input}
             />
@@ -292,7 +344,7 @@ function SessionFormContent({
             <AppButton
               title={submitting ? 'Menyimpan...' : 'Simpan Sesi'}
               onPress={() => void handleSubmit()}
-              disabled={submitting || (!initialData && classes.length === 0)}
+              disabled={submitting || (!initialData && classes.length === 0) || labs.length === 0}
               style={styles.submitButton}
             />
           </View>

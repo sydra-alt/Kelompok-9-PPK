@@ -58,6 +58,9 @@ export function SessionCard({
           <MetaChip icon="🏷️" text={session.className} />
           <MetaChip icon="📅" text={formatDate(session.date)} />
           <MetaChip icon="⏰" text={formatTimeRange(session.startTime, session.endTime)} />
+          {session.labName || session.room ? (
+            <MetaChip icon="📍" text={session.labName ?? session.room ?? ''} />
+          ) : null}
         </View>
 
         {attended ? (

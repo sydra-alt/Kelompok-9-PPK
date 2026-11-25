@@ -3,6 +3,7 @@ import {
   collection,
   deleteDoc,
   doc,
+  getDoc,
   onSnapshot,
   query,
   serverTimestamp,
@@ -208,6 +209,9 @@ export interface AddMemberInput {
 export async function addClassMember(input: AddMemberInput): Promise<string> {
   if (!input.studentId.trim()) throw new AppError('invalid-input', 'UID praktikan wajib diisi.');
   if (!input.studentName.trim()) throw new AppError('invalid-input', 'Nama praktikan wajib diisi.');
+  if (!input.studentIdentifier.trim()) {
+    throw new AppError('invalid-input', 'NIM praktikan wajib diisi.');
+  }
 
   const memberId = `${input.classId}_${input.studentId.trim()}`;
   const ref = doc(getDb(), COLLECTIONS.classMembers, memberId);
@@ -282,6 +286,8 @@ export interface CreateSessionInput {
   classId: string;
   practicalName: string;
   className: string;
+  labId?: string;
+  labName?: string;
   date: string;
   startTime: string;
   endTime: string;
@@ -290,12 +296,26 @@ export interface CreateSessionInput {
   assistantName?: string;
 }
 
+export type UpdateSessionInput = Partial<Omit<CreateSessionInput, 'classId'>>;
+
+const DATE_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
+const TIME_PATTERN = /^([01]\d|2[0-3]):[0-5]\d$/;
+
 export function validateSessionInput(input: CreateSessionInput): string | null {
   if (!input.classId) return 'Kelas wajib dipilih.';
-  if (!input.date) return 'Tanggal wajib diisi.';
-  if (!input.startTime) return 'Waktu mulai wajib diisi.';
-  if (!input.endTime) return 'Waktu selesai wajib diisi.';
-  if (input.startTime >= input.endTime) return 'Waktu mulai harus sebelum waktu selesai.';
+  if (!input.labId?.trim()) {
+    return 'Laboratorium wajib dipilih agar presensi lokasi dan peta aktif.';
+  }
+  const date = input.date.trim();
+  const startTime = input.startTime.trim();
+  const endTime = input.endTime.trim();
+  if (!date) return 'Tanggal wajib diisi.';
+  if (!DATE_PATTERN.test(date)) return 'Format tanggal harus YYYY-MM-DD (mis. 2026-11-25).';
+  if (!startTime) return 'Waktu mulai wajib diisi.';
+  if (!TIME_PATTERN.test(startTime)) return 'Format waktu mulai harus HH:mm (mis. 08:00).';
+  if (!endTime) return 'Waktu selesai wajib diisi.';
+  if (!TIME_PATTERN.test(endTime)) return 'Format waktu selesai harus HH:mm (mis. 10:00).';
+  if (startTime >= endTime) return 'Waktu mulai harus sebelum waktu selesai.';
   return null;
 }
 
@@ -303,17 +323,21 @@ export async function createSession(input: CreateSessionInput): Promise<string> 
   const error = validateSessionInput(input);
   if (error) throw new AppError('invalid-input', error);
 
+  const labId = input.labId?.trim() || null;
+  const labName = input.labName?.trim() || null;
   const ref = await withTimeout<DocumentReference>(
     addDoc(collection(getDb(), COLLECTIONS.sessions), {
       classId: input.classId,
+      labId,
+      labName,
       practicalName: input.practicalName.trim(),
       className: input.className.trim(),
-      date: input.date,
-      startTime: input.startTime,
-      endTime: input.endTime,
+      date: input.date.trim(),
+      startTime: input.startTime.trim(),
+      endTime: input.endTime.trim(),
       status: 'scheduled',
       topic: input.topic?.trim() || null,
-      room: input.room?.trim() || null,
+      room: input.room?.trim() || labName || null,
       assistantName: input.assistantName?.trim() || null,
       createdAt: serverTimestamp(),
       updatedAt: serverTimestamp(),
@@ -326,23 +350,66 @@ export async function createSession(input: CreateSessionInput): Promise<string> 
 
 export async function updateSession(
   sessionId: string,
-  updates: Partial<Omit<CreateSessionInput, 'classId'>>,
+  updates: UpdateSessionInput,
 ): Promise<void> {
   const data: Record<string, unknown> = { updatedAt: serverTimestamp() };
   if (updates.practicalName !== undefined) data.practicalName = updates.practicalName.trim();
   if (updates.className !== undefined) data.className = updates.className.trim();
-  if (updates.date !== undefined) data.date = updates.date;
-  if (updates.startTime !== undefined) data.startTime = updates.startTime;
-  if (updates.endTime !== undefined) data.endTime = updates.endTime;
+  if (updates.labId !== undefined) {
+    const labId = updates.labId.trim();
+    if (!labId) throw new AppError('invalid-input', 'Laboratorium wajib dipilih.');
+    data.labId = labId;
+  }
+  if (updates.labName !== undefined) data.labName = updates.labName.trim() || null;
+  if (updates.date !== undefined) {
+    const date = updates.date.trim();
+    if (!DATE_PATTERN.test(date)) {
+      throw new AppError('invalid-input', 'Format tanggal harus YYYY-MM-DD (mis. 2026-11-25).');
+    }
+    data.date = date;
+  }
+  if (updates.startTime !== undefined) {
+    const startTime = updates.startTime.trim();
+    if (!TIME_PATTERN.test(startTime)) {
+      throw new AppError('invalid-input', 'Format waktu mulai harus HH:mm (mis. 08:00).');
+    }
+    data.startTime = startTime;
+  }
+  if (updates.endTime !== undefined) {
+    const endTime = updates.endTime.trim();
+    if (!TIME_PATTERN.test(endTime)) {
+      throw new AppError('invalid-input', 'Format waktu selesai harus HH:mm (mis. 10:00).');
+    }
+    data.endTime = endTime;
+  }
+  if (
+    typeof data.startTime === 'string' &&
+    typeof data.endTime === 'string' &&
+    data.startTime >= data.endTime
+  ) {
+    throw new AppError('invalid-input', 'Waktu mulai harus sebelum waktu selesai.');
+  }
   if (updates.topic !== undefined) data.topic = updates.topic?.trim() || null;
   if (updates.room !== undefined) data.room = updates.room?.trim() || null;
-  if (updates.assistantName !== undefined) data.assistantName = updates.assistantName?.trim() || null;
+  if (updates.assistantName !== undefined) {
+    data.assistantName = updates.assistantName?.trim() || null;
+  }
 
   await withTimeout(
     updateDoc(doc(getDb(), COLLECTIONS.sessions, sessionId), data),
     WRITE_TIMEOUT_MS,
     'Gagal memperbarui sesi: koneksi ke server terlalu lama.',
   );
+}
+
+/** Membaca satu sesi secara langsung sebagai fallback saat daftar belum termuat penuh. */
+export async function getSessionById(sessionId: string): Promise<PracticeSession | null> {
+  const snap = await withTimeout(
+    getDoc(doc(getDb(), COLLECTIONS.sessions, sessionId)),
+    WRITE_TIMEOUT_MS,
+    'Waktu pembacaan detail sesi habis.',
+  );
+  return snap.exists() ? toPracticeSession(snap) : null;
 }
 
 export async function deleteSession(sessionId: string): Promise<void> {
@@ -462,5 +529,17 @@ export async function decidePermissionRequest(
     WRITE_TIMEOUT_MS,
     'Gagal menyimpan keputusan izin: koneksi ke server terlalu lama.',
   );
+}
+
+/** Membaca satu pengajuan izin secara langsung sebagai fallback pengiriman notifikasi. */
+export async function getPermissionRequestById(
+  requestId: string,
+): Promise<PermissionRequest | null> {
+  const snap = await withTimeout(
+    getDoc(doc(getDb(), COLLECTIONS.permissionRequests, requestId)),
+    WRITE_TIMEOUT_MS,
+    'Waktu pembacaan data izin habis.',
+  );
+  return snap.exists() ? toPermissionRequest(snap) : null;
 }
 

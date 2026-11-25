@@ -6,7 +6,7 @@ import { AppButton } from '@/components/AppButton';
 import { ConfirmActionModal } from '@/components/ConfirmActionModal';
 import { ConfirmDeleteModal } from '@/components/ConfirmDeleteModal';
 import { EmptyState } from '@/components/EmptyState';
-import { FeedbackBanner } from '@/components/FeedbackBanner';
+import { FeedbackBanner, type FeedbackType } from '@/components/FeedbackBanner';
 import { LoadingState } from '@/components/LoadingState';
 import { SessionFormModal } from '@/components/SessionFormModal';
 import { StatusBadge } from '@/components/StatusBadge';
@@ -17,6 +17,8 @@ import { useAuth } from '@/context/AuthContext';
 import { getUserById } from '@/data/users';
 import { navigateTo } from '@/navigation/AppNavigator';
 import { subscribeSession } from '@/services/assistant-data-service';
+import { getErrorMessage } from '@/services/errors';
+import { buildNotificationFeedback } from '@/services/notification-dispatch-service';
 import type { PracticeSession, SessionStatus } from '@/types';
 import { formatClock, formatDate, formatTimeRange } from '@/utils/format';
 
@@ -39,6 +41,7 @@ export default function AssistantSessionManagementScreen() {
 
   const {
     classes,
+    labs,
     sessions,
     attendance,
     setSessionStatus,
@@ -67,10 +70,14 @@ export default function AssistantSessionManagementScreen() {
   }, [sessionId]);
 
   const session = contextSession ?? directSession;
+  const linkedLab = session?.labId ? labs.find((item) => item.id === session.labId) : undefined;
 
   const [pendingAction, setPendingAction] = useState<PendingAction | null>(null);
-  const [feedback, setFeedback] = useState<string | null>(null);
-  const [feedbackType, setFeedbackType] = useState<'success' | 'error'>('success');
+  const [feedback, setFeedback] = useState<{
+    type: FeedbackType;
+    title: string;
+    message: string;
+  } | null>(null);
   const [editModalVisible, setEditModalVisible] = useState(false);
   const [deleteModalVisible, setDeleteModalVisible] = useState(false);
   const [deleting, setDeleting] = useState(false);
@@ -101,16 +108,24 @@ export default function AssistantSessionManagementScreen() {
     if (!session || !pendingAction) return;
     const nextStatus: SessionStatus = pendingAction === 'open' ? 'open' : 'closed';
     try {
-      await setSessionStatus(session.id, nextStatus);
-      setFeedbackType('success');
-      setFeedback(
+      const notifResult = await setSessionStatus(session.id, nextStatus);
+      const baseMessage =
         pendingAction === 'open'
           ? 'Sesi berhasil dibuka. Praktikan sekarang dapat melakukan presensi secara real-time.'
-          : 'Sesi berhasil ditutup. Praktikan tidak dapat lagi melakukan presensi untuk sesi ini.',
+          : 'Sesi berhasil ditutup. Praktikan tidak dapat lagi melakukan presensi untuk sesi ini.';
+      setFeedback(
+        buildNotificationFeedback(
+          pendingAction === 'open' ? 'Sesi Dibuka' : 'Sesi Ditutup',
+          baseMessage,
+          notifResult,
+        ),
       );
     } catch (err: unknown) {
-      setFeedbackType('error');
-      setFeedback(err instanceof Error ? err.message : 'Gagal mengubah status sesi.');
+      setFeedback({
+        type: 'error',
+        title: 'Terjadi Kesalahan',
+        message: getErrorMessage(err, 'Gagal mengubah status sesi.'),
+      });
     } finally {
       setPendingAction(null);
     }
@@ -123,8 +138,11 @@ export default function AssistantSessionManagementScreen() {
       await deleteSession(session.id);
       navigateTo.assistantHome(assistantId);
     } catch (err: unknown) {
-      setFeedbackType('error');
-      setFeedback(err instanceof Error ? err.message : 'Gagal menghapus sesi.');
+      setFeedback({
+        type: 'error',
+        title: 'Terjadi Kesalahan',
+        message: getErrorMessage(err, 'Gagal menghapus sesi.'),
+      });
       setDeleteModalVisible(false);
     } finally {
       setDeleting(false);
@@ -145,9 +163,9 @@ export default function AssistantSessionManagementScreen() {
 
         {feedback ? (
           <FeedbackBanner
-            type={feedbackType}
-            title={feedbackType === 'success' ? 'Berhasil' : 'Terjadi Kesalahan'}
-            message={feedback}
+            type={feedback.type}
+            title={feedback.title}
+            message={feedback.message}
             onClose={() => setFeedback(null)}
             testID="session-status-feedback"
           />
@@ -166,13 +184,35 @@ export default function AssistantSessionManagementScreen() {
           </View>
           <InfoRow label="Tanggal" value={formatDate(session.date)} />
           <InfoRow label="Waktu" value={formatTimeRange(session.startTime, session.endTime)} />
-          <InfoRow label="Lokasi" value={session.room ?? 'Belum ditentukan'} />
+          <InfoRow
+            label="Laboratorium"
+            value={
+              linkedLab
+                ? `${linkedLab.name}${linkedLab.building ? ` (${linkedLab.building})` : ''} • Radius ${linkedLab.radiusMeters} m`
+                : (session.labName ?? 'Belum ditautkan')
+            }
+          />
+          {linkedLab ? (
+            <InfoRow
+              label="Koordinat Lab"
+              value={`${linkedLab.latitude.toFixed(5)}, ${linkedLab.longitude.toFixed(5)}`}
+            />
+          ) : null}
+          <InfoRow label="Ruangan" value={session.room ?? 'Belum ditentukan'} />
           <InfoRow label="Topik" value={session.topic ?? 'Belum ditentukan'} />
           <InfoRow
             label="Asisten Pengampu"
             value={session.assistantName ?? assistantName}
             last
           />
+          {!session.labId ? (
+            <View style={styles.labWarningBanner}>
+              <Text style={styles.labWarningText}>
+                ⚠️ Sesi ini belum tertaut ke laboratorium. Tekan &ldquo;Edit Sesi&rdquo; untuk
+                memilih lab agar presensi lokasi &amp; peta aktif.
+              </Text>
+            </View>
+          ) : null}
         </View>
 
         {/* Rekap Kehadiran Real-Time */}
@@ -189,26 +229,50 @@ export default function AssistantSessionManagementScreen() {
           </View>
 
           {records.length > 0 ? (
-            records.map((record) => (
-              <View key={record.id} style={styles.attendanceRow}>
-                <View style={styles.studentAvatar}>
-                  <Text style={styles.studentInitial}>
-                    {record.studentName
-                      .split(' ')
-                      .map((part) => part[0])
-                      .slice(0, 2)
-                      .join('')}
-                  </Text>
+            records.map((record) => {
+              const hasCoords =
+                record.latitude !== undefined &&
+                record.longitude !== undefined &&
+                record.distanceMeters !== undefined;
+              const isInsideRadius =
+                hasCoords && (!linkedLab || record.distanceMeters! <= linkedLab.radiusMeters);
+
+              return (
+                <View key={record.id} style={styles.attendanceRow}>
+                  <View style={styles.studentAvatar}>
+                    <Text style={styles.studentInitial}>
+                      {record.studentName
+                        .split(' ')
+                        .map((part) => part[0])
+                        .slice(0, 2)
+                        .join('')}
+                    </Text>
+                  </View>
+                  <View style={styles.studentInfo}>
+                    <Text style={styles.studentName}>{record.studentName}</Text>
+                    <Text style={styles.studentId}>
+                      {record.studentIdentifier ? `NIM ${record.studentIdentifier}` : record.studentId}
+                    </Text>
+                    {hasCoords ? (
+                      <Text
+                        style={[
+                          styles.locationMeta,
+                          !isInsideRadius && styles.locationMetaWarning,
+                        ]}>
+                        📍 {Math.round(record.distanceMeters!)} m (
+                        {isInsideRadius ? '✓ Dalam radius' : '⚠️ Di luar radius saat ini'}) •{' '}
+                        {record.latitude!.toFixed(5)}, {record.longitude!.toFixed(5)}
+                      </Text>
+                    ) : (
+                      <Text style={styles.locationMetaMuted}>
+                        Lokasi tidak tercatat (data sebelum Sprint 3)
+                      </Text>
+                    )}
+                  </View>
+                  <Text style={styles.time}>{formatClock(record.attendanceTime)} WIB</Text>
                 </View>
-                <View style={styles.studentInfo}>
-                  <Text style={styles.studentName}>{record.studentName}</Text>
-                  <Text style={styles.studentId}>
-                    {record.studentIdentifier ? `NIM ${record.studentIdentifier}` : record.studentId}
-                  </Text>
-                </View>
-                <Text style={styles.time}>{formatClock(record.attendanceTime)} WIB</Text>
-              </View>
-            ))
+              );
+            })
           ) : (
             <Text style={styles.emptyAttendance}>
               Belum ada praktikan yang tercatat hadir pada sesi ini.
@@ -268,22 +332,30 @@ export default function AssistantSessionManagementScreen() {
       <SessionFormModal
         visible={editModalVisible}
         classes={classes}
+        labs={labs}
         initialData={session}
         defaultAssistantName={assistantName}
         onClose={() => setEditModalVisible(false)}
         onSubmit={async (data) => {
-          await updateSession(session.id, {
+          const notifResult = await updateSession(session.id, {
             date: data.date,
             startTime: data.startTime,
             endTime: data.endTime,
+            labId: data.labId,
+            labName: data.labName,
             topic: data.topic,
             room: data.room,
             assistantName: data.assistantName,
             practicalName: data.practicalName,
             className: data.className,
           });
-          setFeedbackType('success');
-          setFeedback('Informasi sesi berhasil diperbarui.');
+          setFeedback(
+            buildNotificationFeedback(
+              'Informasi sesi diperbarui',
+              'Perubahan jadwal dan lokasi sesi berhasil disimpan.',
+              notifResult,
+            ),
+          );
         }}
       />
 
@@ -478,6 +550,33 @@ const styles = StyleSheet.create({
     color: AppColors.textMuted,
     fontSize: 11,
     marginTop: 2,
+  },
+  locationMeta: {
+    color: AppColors.primaryDark,
+    fontSize: 11,
+    fontWeight: '600',
+    marginTop: 3,
+  },
+  locationMetaWarning: {
+    color: AppColors.warning,
+  },
+  locationMetaMuted: {
+    color: AppColors.textMuted,
+    fontSize: 11,
+    fontStyle: 'italic',
+    marginTop: 3,
+  },
+  labWarningBanner: {
+    backgroundColor: AppColors.warningSoft,
+    borderRadius: Radius.md,
+    padding: Spacing.two + 2,
+    marginTop: Spacing.three,
+  },
+  labWarningText: {
+    color: AppColors.warning,
+    fontSize: 12,
+    lineHeight: 17,
+    fontWeight: '600',
   },
   time: {
     color: AppColors.success,

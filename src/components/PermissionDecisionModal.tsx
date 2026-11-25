@@ -30,25 +30,7 @@ export function PermissionDecisionModal({
   onClose,
   onDecide,
 }: PermissionDecisionModalProps) {
-  const [note, setNote] = useState('');
-  const [error, setError] = useState<string | null>(null);
-  const [submitting, setSubmitting] = useState(false);
-
-  if (!request) return null;
-
-  const handleDecision = async (decision: 'approved' | 'rejected') => {
-    setSubmitting(true);
-    setError(null);
-    try {
-      await onDecide(request.id, decision, note.trim() || undefined);
-      setNote('');
-      onClose();
-    } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : 'Gagal menyimpan keputusan izin.');
-    } finally {
-      setSubmitting(false);
-    }
-  };
+  if (!visible || !request) return null;
 
   return (
     <Modal
@@ -58,113 +40,149 @@ export function PermissionDecisionModal({
       onRequestClose={onClose}
       statusBarTranslucent>
       <View style={styles.backdrop}>
-        <KeyboardAvoidingView
-          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-          style={styles.keyboardView}>
-          <View style={styles.card} accessibilityViewIsModal>
-            <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scroll}>
-              <View style={styles.headerRow}>
-                <View style={styles.titleBlock}>
-                  <Text style={styles.eyebrow}>KEPUTUSAN IZIN</Text>
-                  <Text style={styles.title}>Pengajuan Izin Praktikan</Text>
-                </View>
-                <PermissionStatusBadge status={request.status} />
-              </View>
-
-              {error ? <Text style={styles.errorText}>{error}</Text> : null}
-
-              <View style={styles.infoSection}>
-                <View style={styles.infoRow}>
-                  <Text style={styles.infoLabel}>Praktikan</Text>
-                  <Text style={styles.infoValue}>
-                    {request.studentName} ({request.studentIdentifier})
-                  </Text>
-                </View>
-                <View style={styles.infoRow}>
-                  <Text style={styles.infoLabel}>Kelas & Praktikum</Text>
-                  <Text style={styles.infoValue}>
-                    {request.className} • {request.practicalName}
-                  </Text>
-                </View>
-                <View style={styles.infoRow}>
-                  <Text style={styles.infoLabel}>Tanggal Sesi</Text>
-                  <Text style={styles.infoValue}>{formatDate(request.sessionDate)}</Text>
-                </View>
-              </View>
-
-              <View style={styles.reasonCard}>
-                <Text style={styles.reasonLabel}>Alasan yang Diajukan:</Text>
-                <Text style={styles.reasonText}>{request.reason}</Text>
-              </View>
-
-              <View style={styles.aiCard}>
-                <Text style={styles.aiTitle}>Analisis AI Classifier:</Text>
-                <AiCategoryChip classification={request.aiClassification} />
-                <Text style={styles.aiDisclaimer}>
-                  ⚠️ Keputusan akhir mutlak berada di tangan asisten. Hasil klasifikasi AI hanya
-                  berfungsi sebagai referensi pendukung dan tidak menentukan status izin secara otomatis.
-                </Text>
-              </View>
-
-              {request.status !== 'pending' ? (
-                <View style={styles.decisionHistoryCard}>
-                  <Text style={styles.historyTitle}>Riwayat Keputusan:</Text>
-                  <Text style={styles.historyText}>
-                    Oleh: {request.decidedByName ?? 'Asisten'}
-                  </Text>
-                  {request.decidedAt ? (
-                    <Text style={styles.historyText}>Waktu: {request.decidedAt}</Text>
-                  ) : null}
-                  {request.decisionNote ? (
-                    <Text style={styles.historyText}>Catatan: &ldquo;{request.decisionNote}&rdquo;</Text>
-                  ) : null}
-                </View>
-              ) : null}
-
-              <View style={styles.field}>
-                <Text style={styles.label}>Catatan Keputusan (Opsional)</Text>
-                <TextInput
-                  value={note}
-                  editable={!submitting}
-                  onChangeText={setNote}
-                  placeholder="Tambahkan catatan untuk praktikan (mis. 'Surat dokter valid')"
-                  placeholderTextColor={AppColors.textMuted}
-                  multiline
-                  numberOfLines={3}
-                  style={styles.textArea}
-                />
-              </View>
-
-              <View style={styles.actions}>
-                <Pressable
-                  onPress={onClose}
-                  disabled={submitting}
-                  style={styles.cancelButton}
-                  accessibilityRole="button">
-                  <Text style={styles.cancelText}>Tutup</Text>
-                </Pressable>
-
-                <Pressable
-                  onPress={() => void handleDecision('rejected')}
-                  disabled={submitting}
-                  style={[styles.rejectButton, submitting && styles.disabled]}
-                  accessibilityRole="button">
-                  <Text style={styles.rejectText}>✕ Tolak</Text>
-                </Pressable>
-
-                <Pressable
-                  onPress={() => void handleDecision('approved')}
-                  disabled={submitting}
-                  style={[styles.approveButton, submitting && styles.disabled]}
-                  accessibilityRole="button">
-                  <Text style={styles.approveText}>✓ Setujui</Text>
-                </Pressable>
-              </View>
-            </ScrollView>
-          </View>
-        </KeyboardAvoidingView>
+        <PermissionDecisionContent
+          key={request.id}
+          request={request}
+          onClose={onClose}
+          onDecide={onDecide}
+        />
       </View>
     </Modal>
+  );
+}
+
+function PermissionDecisionContent({
+  request,
+  onClose,
+  onDecide,
+}: {
+  request: PermissionRequest;
+  onClose: () => void;
+  onDecide: (requestId: string, decision: PermissionStatus, note?: string) => Promise<void>;
+}) {
+  const [note, setNote] = useState(request.decisionNote ?? '');
+  const [error, setError] = useState<string | null>(null);
+  const [submitting, setSubmitting] = useState(false);
+
+  const handleDecision = async (decision: 'approved' | 'rejected') => {
+    setSubmitting(true);
+    setError(null);
+    try {
+      await onDecide(request.id, decision, note.trim() || undefined);
+      onClose();
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'Gagal menyimpan keputusan izin.');
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  return (
+    <KeyboardAvoidingView
+      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+      style={styles.keyboardView}>
+      <View style={styles.card} accessibilityViewIsModal>
+        <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scroll}>
+          <View style={styles.headerRow}>
+            <View style={styles.titleBlock}>
+              <Text style={styles.eyebrow}>KEPUTUSAN IZIN</Text>
+              <Text style={styles.title}>Pengajuan Izin Praktikan</Text>
+            </View>
+            <PermissionStatusBadge status={request.status} />
+          </View>
+
+          {error ? <Text style={styles.errorText}>{error}</Text> : null}
+
+          <View style={styles.infoSection}>
+            <View style={styles.infoRow}>
+              <Text style={styles.infoLabel}>Praktikan</Text>
+              <Text style={styles.infoValue}>
+                {request.studentName} ({request.studentIdentifier})
+              </Text>
+            </View>
+            <View style={styles.infoRow}>
+              <Text style={styles.infoLabel}>Kelas & Praktikum</Text>
+              <Text style={styles.infoValue}>
+                {request.className} • {request.practicalName}
+              </Text>
+            </View>
+            <View style={styles.infoRow}>
+              <Text style={styles.infoLabel}>Tanggal Sesi</Text>
+              <Text style={styles.infoValue}>{formatDate(request.sessionDate)}</Text>
+            </View>
+          </View>
+
+          <View style={styles.reasonCard}>
+            <Text style={styles.reasonLabel}>Alasan yang Diajukan:</Text>
+            <Text style={styles.reasonText}>{request.reason}</Text>
+          </View>
+
+          <View style={styles.aiCard}>
+            <Text style={styles.aiTitle}>Analisis AI Classifier:</Text>
+            <AiCategoryChip classification={request.aiClassification} />
+            <Text style={styles.aiDisclaimer}>
+              ⚠️ Keputusan akhir mutlak berada di tangan asisten. Hasil klasifikasi AI hanya
+              berfungsi sebagai referensi pendukung dan tidak menentukan status izin secara otomatis.
+            </Text>
+          </View>
+
+          {request.status !== 'pending' ? (
+            <View style={styles.decisionHistoryCard}>
+              <Text style={styles.historyTitle}>Riwayat Keputusan:</Text>
+              <Text style={styles.historyText}>
+                Oleh: {request.decidedByName ?? 'Asisten'}
+              </Text>
+              {request.decidedAt ? (
+                <Text style={styles.historyText}>Waktu: {request.decidedAt}</Text>
+              ) : null}
+              {request.decisionNote ? (
+                <Text style={styles.historyText}>Catatan: &ldquo;{request.decisionNote}&rdquo;</Text>
+              ) : null}
+            </View>
+          ) : null}
+
+          <View style={styles.field}>
+            <Text style={styles.label}>Catatan Keputusan (Opsional)</Text>
+            <TextInput
+              value={note}
+              editable={!submitting}
+              onChangeText={setNote}
+              placeholder="Tambahkan catatan untuk praktikan (mis. 'Surat dokter valid')"
+              placeholderTextColor={AppColors.textMuted}
+              multiline
+              numberOfLines={3}
+              style={styles.textArea}
+            />
+          </View>
+
+          <View style={styles.actions}>
+            <Pressable
+              onPress={onClose}
+              disabled={submitting}
+              style={styles.cancelButton}
+              accessibilityRole="button">
+              <Text style={styles.cancelText}>Tutup</Text>
+            </Pressable>
+
+            <Pressable
+              onPress={() => void handleDecision('rejected')}
+              disabled={submitting}
+              style={[styles.rejectButton, submitting && styles.disabled]}
+              accessibilityRole="button">
+              <Text style={styles.rejectText}>✕ Tolak</Text>
+            </Pressable>
+
+            <Pressable
+              onPress={() => void handleDecision('approved')}
+              disabled={submitting}
+              style={[styles.approveButton, submitting && styles.disabled]}
+              accessibilityRole="button">
+              <Text style={styles.approveText}>✓ Setujui</Text>
+            </Pressable>
+          </View>
+        </ScrollView>
+      </View>
+    </KeyboardAvoidingView>
   );
 }
 

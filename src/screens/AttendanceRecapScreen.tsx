@@ -29,6 +29,7 @@ export default function AttendanceRecapScreen() {
   const assistantName = profile?.name ?? dummyAssistant?.name ?? 'Asisten';
 
   const {
+    labs,
     sessions,
     attendance,
     loading,
@@ -53,7 +54,16 @@ export default function AttendanceRecapScreen() {
       '';
 
   const selectedSession = assignedSessions.find((session) => session.id === effectiveId);
+  const selectedLab = selectedSession?.labId
+    ? labs.find((lab) => lab.id === selectedSession.labId)
+    : undefined;
   const records = attendance.filter((record) => record.sessionId === effectiveId);
+  const locationVerifiedCount = records.filter(
+    (record) =>
+      record.latitude !== undefined &&
+      record.longitude !== undefined &&
+      record.distanceMeters !== undefined,
+  ).length;
 
   if (loading && assignedSessions.length === 0) {
     return <LoadingState title="Memuat rekap kehadiran..." />;
@@ -138,8 +148,15 @@ export default function AttendanceRecapScreen() {
                 </Text>
                 <Text style={styles.sessionMeta}>
                   {formatTimeRange(selectedSession.startTime, selectedSession.endTime)} •{' '}
-                  {selectedSession.room ?? 'Lokasi belum ditentukan'}
+                  {selectedLab?.name ?? selectedSession.labName ?? selectedSession.room ?? 'Lokasi belum ditentukan'}
+                  {selectedLab?.building ? ` (${selectedLab.building})` : ''}
                 </Text>
+                {selectedLab ? (
+                  <Text style={styles.sessionLabMeta}>
+                    📍 Radius validasi: {selectedLab.radiusMeters} m (
+                    {selectedLab.latitude.toFixed(5)}, {selectedLab.longitude.toFixed(5)})
+                  </Text>
+                ) : null}
                 {selectedSession.topic ? (
                   <Text style={styles.sessionTopic}>Topik: {selectedSession.topic}</Text>
                 ) : null}
@@ -152,6 +169,9 @@ export default function AttendanceRecapScreen() {
                 <Text style={styles.totalLabel}>Total praktikan hadir</Text>
                 <Text style={styles.totalValue}>
                   {records.length} <Text style={styles.totalUnit}>orang</Text>
+                </Text>
+                <Text style={styles.locationSummary}>
+                  Tervalidasi lokasi: {locationVerifiedCount}/{records.length}
                 </Text>
               </View>
               <View style={styles.totalIcon}>
@@ -167,30 +187,77 @@ export default function AttendanceRecapScreen() {
 
           {records.length > 0 ? (
             <View style={styles.recordsCard}>
-              {records.map((record, index) => (
-                <View
-                  key={record.id}
-                  style={[
-                    styles.recordRow,
-                    index === records.length - 1 && styles.lastRecordRow,
-                  ]}>
-                  <View style={styles.indexBadge}>
-                    <Text style={styles.indexText}>{String(index + 1).padStart(2, '0')}</Text>
+              {records.map((record, index) => {
+                const hasLocation =
+                  record.latitude !== undefined &&
+                  record.longitude !== undefined &&
+                  record.distanceMeters !== undefined;
+                const isWithinCurrentRadius =
+                  hasLocation && selectedLab ? record.distanceMeters! <= selectedLab.radiusMeters : true;
+                const datePart = record.attendanceTime.split('T')[0];
+                const formattedDate = /^\d{4}-\d{2}-\d{2}$/.test(datePart)
+                  ? formatDate(datePart)
+                  : '-';
+
+                return (
+                  <View
+                    key={record.id}
+                    style={[
+                      styles.recordRow,
+                      index === records.length - 1 && styles.lastRecordRow,
+                    ]}>
+                    <View style={styles.indexBadge}>
+                      <Text style={styles.indexText}>{String(index + 1).padStart(2, '0')}</Text>
+                    </View>
+                    <View style={styles.studentInfo}>
+                      <Text style={styles.studentName}>{record.studentName}</Text>
+                      <Text style={styles.studentId}>
+                        {record.studentIdentifier
+                          ? `NIM ${record.studentIdentifier}`
+                          : `UID: ${record.studentId}`}
+                      </Text>
+
+                      {hasLocation ? (
+                        <View style={styles.recordLocationBox}>
+                          <View style={styles.recordLocationBadges}>
+                            <View style={styles.distanceBadge}>
+                              <Text style={styles.distanceBadgeText}>
+                                📍 Jarak {Math.round(record.distanceMeters!)} m
+                              </Text>
+                            </View>
+                            <View
+                              style={[
+                                styles.validBadge,
+                                !isWithinCurrentRadius && styles.validBadgeWarning,
+                              ]}>
+                              <Text
+                                style={[
+                                  styles.validBadgeText,
+                                  !isWithinCurrentRadius && styles.validBadgeTextWarning,
+                                ]}>
+                                {selectedLab
+                                  ? isWithinCurrentRadius
+                                    ? `✓ Valid ≤ ${selectedLab.radiusMeters} m`
+                                    : '⚠️ Melebihi radius lab saat ini'
+                                  : '✓ Lokasi tercatat'}
+                              </Text>
+                            </View>
+                          </View>
+                          <Text style={styles.coordText}>
+                            Koordinat: {record.latitude!.toFixed(5)}, {record.longitude!.toFixed(5)}
+                          </Text>
+                        </View>
+                      ) : (
+                        <Text style={styles.noLocationText}>Metadata lokasi tidak tersedia</Text>
+                      )}
+                    </View>
+                    <View style={styles.timeColumn}>
+                      <Text style={styles.timeValue}>{formatClock(record.attendanceTime)} WIB</Text>
+                      <Text style={styles.timeLabel}>{formattedDate}</Text>
+                    </View>
                   </View>
-                  <View style={styles.studentInfo}>
-                    <Text style={styles.studentName}>{record.studentName}</Text>
-                    <Text style={styles.studentId}>
-                      {record.studentIdentifier
-                        ? `NIM ${record.studentIdentifier}`
-                        : `UID: ${record.studentId}`}
-                    </Text>
-                  </View>
-                  <View style={styles.timeColumn}>
-                    <Text style={styles.timeValue}>{formatClock(record.attendanceTime)} WIB</Text>
-                    <Text style={styles.timeLabel}>Waktu hadir</Text>
-                  </View>
-                </View>
-              ))}
+                );
+              })}
             </View>
           ) : (
             <View style={styles.emptyCard}>
@@ -336,6 +403,12 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     marginTop: 4,
   },
+  sessionLabMeta: {
+    color: AppColors.primaryDark,
+    fontSize: 12,
+    fontWeight: '600',
+    marginTop: 4,
+  },
   totalRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -359,6 +432,12 @@ const styles = StyleSheet.create({
     color: AppColors.textMuted,
     fontSize: 12,
     fontWeight: '500',
+  },
+  locationSummary: {
+    color: AppColors.success,
+    fontSize: 12,
+    fontWeight: '600',
+    marginTop: 2,
   },
   totalIcon: {
     width: 36,
@@ -397,9 +476,10 @@ const styles = StyleSheet.create({
     ...CardShadow,
   },
   recordRow: {
-    minHeight: 64,
+    minHeight: 72,
+    paddingVertical: Spacing.two + 4,
     flexDirection: 'row',
-    alignItems: 'center',
+    alignItems: 'flex-start',
     gap: Spacing.two + 4,
     borderBottomWidth: 1,
     borderBottomColor: AppColors.border,
@@ -414,6 +494,7 @@ const styles = StyleSheet.create({
     backgroundColor: AppColors.primarySoft,
     alignItems: 'center',
     justifyContent: 'center',
+    marginTop: 2,
   },
   indexText: {
     color: AppColors.primary,
@@ -433,6 +514,53 @@ const styles = StyleSheet.create({
     fontSize: 11,
     marginTop: 2,
   },
+  recordLocationBox: {
+    marginTop: 6,
+    gap: 4,
+  },
+  recordLocationBadges: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 6,
+  },
+  distanceBadge: {
+    backgroundColor: AppColors.primarySoft,
+    paddingHorizontal: 7,
+    paddingVertical: 2,
+    borderRadius: Radius.sm,
+  },
+  distanceBadgeText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: AppColors.primaryDark,
+  },
+  validBadge: {
+    backgroundColor: AppColors.successSoft,
+    paddingHorizontal: 7,
+    paddingVertical: 2,
+    borderRadius: Radius.sm,
+  },
+  validBadgeWarning: {
+    backgroundColor: AppColors.warningSoft,
+  },
+  validBadgeText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: AppColors.success,
+  },
+  validBadgeTextWarning: {
+    color: AppColors.warning,
+  },
+  coordText: {
+    fontSize: 10,
+    color: AppColors.textMuted,
+  },
+  noLocationText: {
+    fontSize: 11,
+    color: AppColors.textMuted,
+    fontStyle: 'italic',
+    marginTop: 4,
+  },
   timeColumn: {
     alignItems: 'flex-end',
   },
@@ -445,6 +573,7 @@ const styles = StyleSheet.create({
     color: AppColors.textMuted,
     fontSize: 10,
     marginTop: 2,
+    textAlign: 'right',
   },
   emptyCard: {
     borderWidth: 1,

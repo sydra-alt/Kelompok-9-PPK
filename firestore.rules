@@ -17,6 +17,11 @@ service cloud.firestore {
       return isAuthenticated() && request.auth.uid == userId;
     }
 
+    /** Memastikan dokumen profil pengguna ada di koleksi users. */
+    function hasUserProfile() {
+      return isAuthenticated() && exists(/databases/$(database)/documents/users/$(request.auth.uid));
+    }
+
     /** Membaca dokumen profil pengguna dari koleksi users. */
     function getUserProfile() {
       return get(/databases/$(database)/documents/users/$(request.auth.uid)).data;
@@ -24,12 +29,54 @@ service cloud.firestore {
 
     /** Memeriksa apakah pengguna memiliki peran 'asisten' yang sah. */
     function isAssistant() {
-      return isAuthenticated() && getUserProfile().role == 'asisten';
+      return hasUserProfile() && getUserProfile().role == 'asisten';
     }
 
     /** Memeriksa apakah pengguna memiliki peran 'praktikan' yang sah. */
     function isStudent() {
-      return isAuthenticated() && getUserProfile().role == 'praktikan';
+      return hasUserProfile() && getUserProfile().role == 'praktikan';
+    }
+
+    /** Memvalidasi pasangan koordinat geografis bumi. */
+    function isValidCoordinate(lat, lng) {
+      return lat is number
+        && lat >= -90
+        && lat <= 90
+        && lng is number
+        && lng >= -180
+        && lng <= 180;
+    }
+
+    /** Memvalidasi field wajib & tipe dokumen laboratorium (Sprint 3). */
+    function isValidLab(data) {
+      return data.name is string
+        && data.name.size() > 0
+        && data.name.size() <= 120
+        && isValidCoordinate(data.latitude, data.longitude)
+        && data.radiusMeters is number
+        && data.radiusMeters > 0
+        && data.radiusMeters <= 10000
+        && (!('building' in data) || data.building == null || data.building is string)
+        && (!('description' in data) || data.description == null || data.description is string);
+    }
+
+    function getSessionData(sessionId) {
+      return get(/databases/$(database)/documents/sessions/$(sessionId)).data;
+    }
+
+    function getLabData(labId) {
+      return get(/databases/$(database)/documents/labs/$(labId)).data;
+    }
+
+    /** Memastikan presensi dilakukan pada sesi 'open' yang tertaut ke lab sah dan dalam radius. */
+    function isValidAttendanceForOpenLabSession(data) {
+      return exists(/databases/$(database)/documents/sessions/$(data.sessionId))
+        && getSessionData(data.sessionId).status == 'open'
+        && getSessionData(data.sessionId).labId is string
+        && getSessionData(data.sessionId).labId.size() > 0
+        && exists(/databases/$(database)/documents/labs/$(getSessionData(data.sessionId).labId))
+        && getLabData(getSessionData(data.sessionId).labId).radiusMeters is number
+        && data.distanceMeters <= getLabData(getSessionData(data.sessionId).labId).radiusMeters;
     }
 
     // Tolak semua akses publik tanpa autentikasi secara default
@@ -38,30 +85,52 @@ service cloud.firestore {
     }
 
     // -------------------------------------------------------------------------
-    // 1. users/{userId} — Profil Pengguna & Role
+    // 1. users/{userId} — Profil Pengguna, Role & Push Tokens (Sprint 2 + 3)
     // -------------------------------------------------------------------------
     match /users/{userId} {
-      // Pengguna terautentikasi dapat membaca profil (mis. nama praktikan/asisten)
-      allow read: if isAuthenticated();
+      // Pemilik akun dapat membaca profilnya; asisten dapat membaca profil & pushTokens peserta
+      allow read: if isOwner(userId) || isAssistant();
 
       // Registrasi mandiri hanya boleh membuat akun praktikan atas nama sendiri
       allow create: if isOwner(userId)
                     && request.resource.data.uid == userId
                     && request.resource.data.role == 'praktikan'
                     && request.resource.data.name is string
-                    && request.resource.data.identifier is string;
+                    && request.resource.data.identifier is string
+                    && (!('pushTokens' in request.resource.data)
+                      || (request.resource.data.pushTokens is list
+                          && request.resource.data.pushTokens.size() <= 20));
 
-      // Pembaruan profil: dilarang memanipulasi role atau mengubah UID
+      // Pembaruan profil & pendaftaran push token oleh pemilik sendiri:
+      // Dilarang memanipulasi role atau mengubah UID
       allow update: if isOwner(userId)
-                    && request.resource.data.uid == resource.data.uid
-                    && request.resource.data.role == resource.data.role;
+                    && request.resource.data.get('uid', userId) == resource.data.get('uid', userId)
+                    && request.resource.data.role == resource.data.role
+                    && request.resource.data.diff(resource.data).affectedKeys()
+                        .hasOnly(['name', 'identifier', 'email', 'pushTokens', 'pushTokenUpdatedAt', 'updatedAt'])
+                    && (!('pushTokens' in request.resource.data)
+                      || (request.resource.data.pushTokens is list
+                          && request.resource.data.pushTokens.size() <= 20));
 
       // Hapus profil dilarang dari aplikasi client
       allow delete: if false;
     }
 
     // -------------------------------------------------------------------------
-    // 2. classes/{classId} — Data Kelas Praktikum
+    // 2. labs/{labId} — Lokasi Laboratorium & Radius Validasi (Sprint 3)
+    // -------------------------------------------------------------------------
+    match /labs/{labId} {
+      // Seluruh pengguna terautentikasi dapat membaca lokasi lab (Peta & Presensi Lokasi)
+      allow read: if isAuthenticated();
+
+      // Hanya asisten berwenang yang dapat mengelola data laboratorium
+      allow create, update: if isAssistant() && isValidLab(request.resource.data);
+
+      allow delete: if isAssistant();
+    }
+
+    // -------------------------------------------------------------------------
+    // 3. classes/{classId} — Data Kelas Praktikum
     // -------------------------------------------------------------------------
     match /classes/{classId} {
       // Praktikan & asisten dapat membaca daftar kelas
@@ -70,58 +139,86 @@ service cloud.firestore {
       // Hanya asisten yang berwenang mengelola kelas
       allow create: if isAssistant()
                     && request.resource.data.name is string
-                    && request.resource.data.practicalName is string;
+                    && request.resource.data.name.size() > 0
+                    && request.resource.data.practicalName is string
+                    && request.resource.data.practicalName.size() > 0;
 
       allow update: if isAssistant()
                     && request.resource.data.name is string
-                    && request.resource.data.practicalName is string;
+                    && request.resource.data.name.size() > 0
+                    && request.resource.data.practicalName is string
+                    && request.resource.data.practicalName.size() > 0;
 
       allow delete: if isAssistant();
     }
 
     // -------------------------------------------------------------------------
-    // 3. classMembers/{memberId} — Peserta Kelas Praktikum
+    // 4. classMembers/{memberId} — Peserta Kelas Praktikum
     // -------------------------------------------------------------------------
     match /classMembers/{memberId} {
       allow read: if isAuthenticated();
 
-      allow create, update, delete: if isAssistant();
+      allow create, update: if isAssistant()
+                            && request.resource.data.classId is string
+                            && request.resource.data.studentId is string
+                            && request.resource.data.studentName is string;
+
+      allow delete: if isAssistant();
     }
 
     // -------------------------------------------------------------------------
-    // 4. sessions/{sessionId} — Jadwal Pertemuan & Status Sesi
+    // 5. sessions/{sessionId} — Jadwal Pertemuan, Tautan Lab & Status Sesi
     // -------------------------------------------------------------------------
     match /sessions/{sessionId} {
       allow read: if isAuthenticated();
 
-      // Hanya asisten berwenang yang boleh menambah, mengubah status, atau menghapus sesi
+      // Hanya asisten berwenang yang boleh menambah, menyunting jadwal/lab, mengubah status, atau menghapus sesi
       allow create: if isAssistant()
                     && request.resource.data.classId is string
                     && request.resource.data.status in ['scheduled', 'open', 'closed']
                     && request.resource.data.date is string
                     && request.resource.data.startTime is string
-                    && request.resource.data.endTime is string;
+                    && request.resource.data.endTime is string
+                    && (!('labId' in request.resource.data)
+                      || request.resource.data.labId == null
+                      || (request.resource.data.labId is string && request.resource.data.labId.size() > 0))
+                    && (!('labName' in request.resource.data)
+                      || request.resource.data.labName == null
+                      || request.resource.data.labName is string);
 
       allow update: if isAssistant()
-                    && request.resource.data.status in ['scheduled', 'open', 'closed'];
+                    && request.resource.data.status in ['scheduled', 'open', 'closed']
+                    && request.resource.data.classId == resource.data.classId
+                    && (!('labId' in request.resource.data)
+                      || request.resource.data.labId == null
+                      || (request.resource.data.labId is string && request.resource.data.labId.size() > 0))
+                    && (!('labName' in request.resource.data)
+                      || request.resource.data.labName == null
+                      || request.resource.data.labName is string);
 
       allow delete: if isAssistant();
     }
 
     // -------------------------------------------------------------------------
-    // 5. attendance/{attendanceId} — Presensi Praktikan
+    // 6. attendance/{attendanceId} — Presensi Praktikan + Validasi Lokasi (Sprint 3)
     // -------------------------------------------------------------------------
     match /attendance/{attendanceId} {
       // Asisten dapat membaca semua presensi; Praktikan hanya membaca presensi miliknya
       allow read: if isAssistant() || (isStudent() && resource.data.studentId == request.auth.uid);
 
-      // Praktikan hanya dapat membuat presensi atas namanya sendiri saat sesi 'open'
-      allow create: if isAuthenticated()
+      // Praktikan hanya dapat membuat presensi atas namanya sendiri dengan ID deterministik
+      // pada sesi berstatus 'open' serta menyertakan metadata koordinat dan jarak dalam radius lab
+      allow create: if isStudent()
+                    && attendanceId == request.resource.data.sessionId + '_' + request.auth.uid
                     && request.resource.data.studentId == request.auth.uid
                     && request.resource.data.sessionId is string
-                    && get(/databases/$(database)/documents/sessions/$(request.resource.data.sessionId)).data.status == 'open';
+                    && request.resource.data.studentName is string
+                    && isValidCoordinate(request.resource.data.latitude, request.resource.data.longitude)
+                    && request.resource.data.distanceMeters is number
+                    && request.resource.data.distanceMeters >= 0
+                    && isValidAttendanceForOpenLabSession(request.resource.data);
 
-      // Presensi yang sudah tersimpan tidak boleh diubah (anti-manipulasi)
+      // Presensi yang sudah tersimpan tidak boleh diubah (anti-manipulasi / anti-duplikat)
       allow update: if false;
 
       // Hanya asisten yang dapat menghapus presensi jika diperlukan
@@ -129,20 +226,22 @@ service cloud.firestore {
     }
 
     // -------------------------------------------------------------------------
-    // 6. permissionRequests/{requestId} — Pengajuan Izin
+    // 7. permissionRequests/{requestId} — Pengajuan Izin
     // -------------------------------------------------------------------------
     match /permissionRequests/{requestId} {
       // Asisten dapat membaca semua izin; Praktikan hanya membaca izin miliknya
       allow read: if isAssistant() || (isStudent() && resource.data.studentId == request.auth.uid);
 
       // Praktikan membuat pengajuan izin untuk dirinya sendiri dengan status awal 'pending'
-      allow create: if isAuthenticated()
+      allow create: if isStudent()
+                    && requestId == request.resource.data.sessionId + '_' + request.auth.uid
                     && request.resource.data.studentId == request.auth.uid
                     && request.resource.data.status == 'pending'
                     && request.resource.data.reason is string
                     && request.resource.data.reason.size() >= 10
                     && request.resource.data.reason.size() <= 500
-                    && get(/databases/$(database)/documents/sessions/$(request.resource.data.sessionId)).data.status != 'closed';
+                    && exists(/databases/$(database)/documents/sessions/$(request.resource.data.sessionId))
+                    && getSessionData(request.resource.data.sessionId).status != 'closed';
 
       // Pembaruan izin:
       // - Asisten: menetapkan keputusan ('approved' / 'rejected'), mengisi decidedBy, decidedAt
@@ -151,17 +250,19 @@ service cloud.firestore {
         isAssistant()
         && request.resource.data.status in ['approved', 'rejected']
         && request.resource.data.decidedBy == request.auth.uid
+        && request.resource.data.studentId == resource.data.studentId
+        && request.resource.data.sessionId == resource.data.sessionId
+        && request.resource.data.reason == resource.data.reason
       ) || (
         isStudent()
         && resource.data.studentId == request.auth.uid
         && resource.data.status == 'pending'
         && request.resource.data.status == 'pending'
-        && request.resource.data.studentId == resource.data.studentId
-        && request.resource.data.reason == resource.data.reason
+        && request.resource.data.diff(resource.data).affectedKeys()
+            .hasOnly(['aiClassification', 'updatedAt'])
       );
 
       allow delete: if isAssistant();
     }
   }
 }
-

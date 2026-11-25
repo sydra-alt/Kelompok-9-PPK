@@ -17,6 +17,8 @@ import {
   decidePermissionRequest as serviceDecidePermission,
   deleteClass as serviceDeleteClass,
   deleteSession as serviceDeleteSession,
+  getPermissionRequestById,
+  getSessionById,
   removeClassMember as serviceRemoveClassMember,
   subscribeAllClasses,
   subscribeAssistantClasses,
@@ -30,11 +32,27 @@ import {
   type AddMemberInput,
   type CreateClassInput,
   type CreateSessionInput,
+  type UpdateSessionInput,
 } from '@/services/assistant-data-service';
 import { getErrorMessage } from '@/services/errors';
+import {
+  createLab as serviceCreateLab,
+  deleteLab as serviceDeleteLab,
+  subscribeAllLabs,
+  updateLab as serviceUpdateLab,
+  type LabInput,
+} from '@/services/lab-service';
+import {
+  hasScheduleChanged,
+  notifyPermissionDecision,
+  notifyScheduleChanged,
+  notifySessionOpened,
+  type NotificationDispatchResult,
+} from '@/services/notification-dispatch-service';
 import type {
   AttendanceRecord,
   ClassMembership,
+  Lab,
   PermissionRequest,
   PermissionStatus,
   PracticeClass,
@@ -48,6 +66,7 @@ import type {
  * Mengelola langganan Firestore real-time untuk:
  * - Kelas praktikum (`classes`) yang diampu asisten
  * - Peserta kelas (`classMembers`)
+ * - Laboratorium (`labs`)
  * - Sesi pertemuan (`sessions`)
  * - Rekap presensi (`attendance`)
  * - Pengajuan izin praktikan (`permissionRequests`)
@@ -55,6 +74,7 @@ import type {
 
 interface AssistantDataContextValue {
   classes: PracticeClass[];
+  labs: Lab[];
   sessions: PracticeSession[];
   attendance: AttendanceRecord[];
   permissionRequests: PermissionRequest[];
@@ -68,16 +88,30 @@ interface AssistantDataContextValue {
   createClass: (input: CreateClassInput) => Promise<string>;
   updateClass: (classId: string, input: Partial<CreateClassInput>) => Promise<void>;
   deleteClass: (classId: string) => Promise<void>;
+  // CRUD Laboratorium
+  createLab: (input: LabInput) => Promise<string>;
+  updateLab: (labId: string, input: LabInput) => Promise<void>;
+  deleteLab: (labId: string) => Promise<void>;
   // CRUD Peserta
   addMember: (input: AddMemberInput) => Promise<string>;
   removeMember: (memberId: string) => Promise<void>;
   // CRUD Sesi & Status
   createSession: (input: CreateSessionInput) => Promise<string>;
-  updateSession: (sessionId: string, updates: Partial<Omit<CreateSessionInput, 'classId'>>) => Promise<void>;
+  updateSession: (
+    sessionId: string,
+    updates: UpdateSessionInput,
+  ) => Promise<NotificationDispatchResult | null>;
   deleteSession: (sessionId: string) => Promise<void>;
-  setSessionStatus: (sessionId: string, status: SessionStatus) => Promise<void>;
+  setSessionStatus: (
+    sessionId: string,
+    status: SessionStatus,
+  ) => Promise<NotificationDispatchResult | null>;
   // Keputusan Izin
-  decidePermission: (requestId: string, decision: PermissionStatus, note?: string) => Promise<void>;
+  decidePermission: (
+    requestId: string,
+    decision: PermissionStatus,
+    note?: string,
+  ) => Promise<NotificationDispatchResult | null>;
 }
 
 interface KeyedData<T> {
@@ -101,6 +135,7 @@ export function AssistantDataProvider({ children }: PropsWithChildren) {
   const assistantScopeKey = assistantUid ? `${assistantUid}:${retryKey}` : null;
 
   const [classesSnap, setClassesSnap] = useState<KeyedData<PracticeClass[]> | null>(null);
+  const [labsSnap, setLabsSnap] = useState<KeyedData<Lab[]> | null>(null);
   const [membersSnap, setMembersSnap] = useState<KeyedData<ClassMembership[]> | null>(null);
   const [sessionsSnap, setSessionsSnap] = useState<KeyedData<PracticeSession[]> | null>(null);
   const [attendanceSnap, setAttendanceSnap] = useState<KeyedData<AttendanceRecord[]> | null>(null);
@@ -151,10 +186,32 @@ export function AssistantDataProvider({ children }: PropsWithChildren) {
     };
   }, [assistantUid, assistantScopeKey]);
 
+  // 1b. Berlangganan daftar laboratorium secara real-time (Sprint 3)
+  useEffect(() => {
+    if (!assistantUid || !assistantScopeKey) return undefined;
+
+    return subscribeAllLabs(
+      (data, meta) => {
+        setLabsSnap({ key: assistantScopeKey, data, fromCache: meta.fromCache });
+      },
+      (err) => {
+        setErrorState({
+          key: assistantScopeKey,
+          message: getErrorMessage(err, 'Gagal memuat data laboratorium dari server.'),
+        });
+      },
+    );
+  }, [assistantUid, assistantScopeKey]);
+
   const classesLoaded = Boolean(assistantScopeKey && classesSnap?.key === assistantScopeKey);
+  const labsLoaded = Boolean(assistantScopeKey && labsSnap?.key === assistantScopeKey);
   const classes = useMemo(
     () => (classesLoaded && classesSnap ? classesSnap.data : []),
     [classesLoaded, classesSnap],
+  );
+  const labs = useMemo(
+    () => (labsLoaded && labsSnap ? labsSnap.data : []),
+    [labsLoaded, labsSnap],
   );
 
   const classIdsKey = useMemo(
@@ -263,6 +320,7 @@ export function AssistantDataProvider({ children }: PropsWithChildren) {
   const error = assistantScopeKey && errorState?.key === assistantScopeKey ? errorState.message : null;
   const fromCache = Boolean(
     (classesLoaded && classesSnap?.fromCache) ||
+      (labsLoaded && labsSnap?.fromCache) ||
       (sessionsLoaded && sessionsSnap?.fromCache) ||
       (attendanceLoaded && attendanceSnap?.fromCache) ||
       (permissionsLoaded && permissionsSnap?.fromCache),
@@ -272,6 +330,7 @@ export function AssistantDataProvider({ children }: PropsWithChildren) {
     assistantScopeKey &&
       !error &&
       (!classesLoaded ||
+        !labsLoaded ||
         !sessionsLoaded ||
         !attendanceLoaded ||
         !permissionsLoaded ||
@@ -295,6 +354,18 @@ export function AssistantDataProvider({ children }: PropsWithChildren) {
     return serviceDeleteClass(classId);
   }, []);
 
+  const createLab = useCallback(async (input: LabInput) => {
+    return serviceCreateLab(input);
+  }, []);
+
+  const updateLab = useCallback(async (labId: string, input: LabInput) => {
+    return serviceUpdateLab(labId, input);
+  }, []);
+
+  const deleteLab = useCallback(async (labId: string) => {
+    return serviceDeleteLab(labId);
+  }, []);
+
   const addMember = useCallback(async (input: AddMemberInput) => {
     return serviceAddClassMember(input);
   }, []);
@@ -308,34 +379,137 @@ export function AssistantDataProvider({ children }: PropsWithChildren) {
   }, []);
 
   const updateSession = useCallback(
-    async (sessionId: string, updates: Partial<Omit<CreateSessionInput, 'classId'>>) => {
-      return serviceUpdateSession(sessionId, updates);
+    async (
+      sessionId: string,
+      updates: UpdateSessionInput,
+    ): Promise<NotificationDispatchResult | null> => {
+      const previous = sessions.find((item) => item.id === sessionId);
+      await serviceUpdateSession(sessionId, updates);
+
+      if (!hasScheduleChanged(previous, updates)) {
+        return null;
+      }
+
+      try {
+        const targetSession = previous
+          ? { ...previous, ...updates }
+          : await getSessionById(sessionId);
+        if (!targetSession) {
+          return {
+            status: 'failed',
+            recipientCount: 0,
+            tokenCount: 0,
+            sentCount: 0,
+            failedCount: 0,
+            message: 'Detail sesi terbaru tidak ditemukan untuk pengiriman notifikasi.',
+          };
+        }
+        return await notifyScheduleChanged(targetSession);
+      } catch (err) {
+        return {
+          status: 'failed',
+          recipientCount: 0,
+          tokenCount: 0,
+          sentCount: 0,
+          failedCount: 0,
+          message: getErrorMessage(err, 'Pengiriman notifikasi perubahan jadwal gagal.'),
+        };
+      }
     },
-    [],
+    [sessions],
   );
 
   const deleteSession = useCallback(async (sessionId: string) => {
     return serviceDeleteSession(sessionId);
   }, []);
 
-  const setSessionStatus = useCallback(async (sessionId: string, status: SessionStatus) => {
-    if (status === 'scheduled') {
-      throw new Error('Status tidak dapat dikembalikan ke scheduled.');
-    }
-    return serviceUpdateSessionStatus(sessionId, status);
-  }, []);
+  const setSessionStatus = useCallback(
+    async (
+      sessionId: string,
+      nextStatus: SessionStatus,
+    ): Promise<NotificationDispatchResult | null> => {
+      if (nextStatus === 'scheduled') {
+        throw new Error('Status tidak dapat dikembalikan ke scheduled.');
+      }
+      const existing = sessions.find((item) => item.id === sessionId);
+      await serviceUpdateSessionStatus(sessionId, nextStatus);
+
+      if (nextStatus !== 'open') {
+        return null;
+      }
+
+      try {
+        const targetSession = existing ?? (await getSessionById(sessionId));
+        if (!targetSession) {
+          return {
+            status: 'failed',
+            recipientCount: 0,
+            tokenCount: 0,
+            sentCount: 0,
+            failedCount: 0,
+            message: 'Detail sesi tidak ditemukan untuk pengiriman notifikasi.',
+          };
+        }
+        return await notifySessionOpened({ ...targetSession, status: 'open' });
+      } catch (err) {
+        return {
+          status: 'failed',
+          recipientCount: 0,
+          tokenCount: 0,
+          sentCount: 0,
+          failedCount: 0,
+          message: getErrorMessage(err, 'Pengiriman notifikasi pembukaan sesi gagal.'),
+        };
+      }
+    },
+    [sessions],
+  );
 
   const decidePermission = useCallback(
-    async (requestId: string, decision: PermissionStatus, note?: string) => {
+    async (
+      requestId: string,
+      decision: PermissionStatus,
+      note?: string,
+    ): Promise<NotificationDispatchResult | null> => {
       if (!profile) throw new Error('Profil asisten tidak ditemukan.');
-      return serviceDecidePermission(requestId, decision, profile, note);
+      const existing = permissionRequests.find((item) => item.id === requestId);
+      await serviceDecidePermission(requestId, decision, profile, note);
+
+      if (decision !== 'approved' && decision !== 'rejected') {
+        return null;
+      }
+
+      try {
+        const targetRequest = existing ?? (await getPermissionRequestById(requestId));
+        if (!targetRequest) {
+          return {
+            status: 'failed',
+            recipientCount: 0,
+            tokenCount: 0,
+            sentCount: 0,
+            failedCount: 0,
+            message: 'Data pengajuan izin tidak ditemukan untuk pengiriman notifikasi.',
+          };
+        }
+        return await notifyPermissionDecision(targetRequest, decision, note);
+      } catch (err) {
+        return {
+          status: 'failed',
+          recipientCount: 0,
+          tokenCount: 0,
+          sentCount: 0,
+          failedCount: 0,
+          message: getErrorMessage(err, 'Pengiriman notifikasi keputusan izin gagal.'),
+        };
+      }
     },
-    [profile],
+    [profile, permissionRequests],
   );
 
   const value = useMemo<AssistantDataContextValue>(
     () => ({
       classes,
+      labs,
       sessions,
       attendance,
       permissionRequests,
@@ -348,6 +522,9 @@ export function AssistantDataProvider({ children }: PropsWithChildren) {
       createClass,
       updateClass,
       deleteClass,
+      createLab,
+      updateLab,
+      deleteLab,
       addMember,
       removeMember,
       createSession,
@@ -358,6 +535,7 @@ export function AssistantDataProvider({ children }: PropsWithChildren) {
     }),
     [
       classes,
+      labs,
       sessions,
       attendance,
       permissionRequests,
@@ -370,6 +548,9 @@ export function AssistantDataProvider({ children }: PropsWithChildren) {
       createClass,
       updateClass,
       deleteClass,
+      createLab,
+      updateLab,
+      deleteLab,
       addMember,
       removeMember,
       createSession,
