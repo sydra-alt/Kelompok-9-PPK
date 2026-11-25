@@ -178,14 +178,28 @@ Sprint 4 menambahkan peran baru **Aslab** (*Asisten Laboratorium*) dengan kewena
 
 ### Kontrak Integrasi Bersama (Sprint 4)
 
+#### Keputusan Kontrak Presensi, Keterlambatan, dan Denda
+
+Keputusan berikut disepakati untuk implementasi Sprint 4 dan menjadi acuan bersama Programmer 1, Programmer 2, serta project manager:
+
+- **Zona waktu:** gunakan `Asia/Jakarta` (WIB) untuk menafsirkan tanggal dan jam sesi di Semarang. Simpan waktu kejadian sebagai timestamp Firestore; tampilkan dan bandingkan waktu sesi berdasarkan zona waktu tersebut.
+- **Masa toleransi:** nilai default `gracePeriodMinutes` adalah `15`. Nilai pada dokumen sesi, jika diisi, meng-override nilai kebijakan pada lab; jika tidak ada, gunakan nilai lab.
+- **Batas tepat waktu:** presensi sampai dengan dan termasuk 15 menit setelah waktu mulai terjadwal berstatus `on_time`. Presensi setelah batas tersebut berstatus `late`.
+- **Sesi masih terbuka:** praktikan masih dapat tercatat hadir terlambat setelah batas toleransi selama sesi berstatus `open` dan presensi dilakukan sebelum atau tepat waktu sesi ditutup. Setelah sesi `closed`, presensi baru ditolak.
+- **Ketidakhadiran:** backend baru mengevaluasi praktikan yang belum memiliki presensi setelah sesi ditutup. Izin yang sudah `approved` menghasilkan `excused_absence` dan tidak dikenai denda. Status untuk ketidakhadiran tanpa izin belum ditambahkan ke himpunan status yang disepakati.
+- **Otoritas backend:** backend adalah penulis tepercaya untuk status `late` dan dokumen denda. Untuk satu keterlambatan hanya boleh ada satu denda. Aplikasi tidak boleh membuat atau mengubah status denda/pembayaran secara langsung.
+- **Status presensi yang disepakati:** `on_time`, `late`, dan `excused_absence` (ejaan `pn_time` pada catatan awal dikoreksi menjadi `on_time`). Pembayaran denda tidak mengubah status presensi.
+- **Menit keterlambatan:** field `lateMinutes` tetap digunakan. Belum diputuskan apakah nilainya dihitung sejak waktu mulai sesi atau sejak akhir masa toleransi; Programmer 1, Programmer 2, dan project manager harus menyepakati definisi yang sama sebelum implementasi.
+- **Kontrak endpoint presensi backend:** belum ditentukan. Programmer 2 perlu menetapkan endpoint, autentikasi Firebase ID Token, payload (minimal ID sesi dan metadata lokasi), response, serta bentuk error sebelum client dihubungkan ke backend.
+
 - **Koleksi & Field Tambahan Firestore:**
 
 | Koleksi | Field Kunci & Ekstensi Sprint 4 | Keterangan |
 | --- | --- | --- |
 | `users/{uid}` | `role`: `'praktikan' \| 'asisten' \| 'aslab'` | Sumber peran tepercaya; role `asisten` dipertahankan dan `aslab` merupakan role terpisah. |
-| `labs/{labId}` | `courseName`, `building`, `latitude`, `longitude`, `radiusMeters`, `gracePeriodMinutes`, `lateFineAmount`, `assistantIds`, `aslabIds` | Konfigurasi lokasi, kebijakan keterlambatan/denda, dan anggota per lab. |
-| `sessions/{sessionId}` | `labId`, `labName`, `gracePeriodMinutes` *(opsional override)*, `lateFineAmount` *(opsional override)* | Jadwal sesi yang tertaut ke laboratorium. |
-| `attendance/{sessionId}_{studentId}` | `attendanceStatus`: `'on_time' \| 'late' \| 'excused_absence'`, `lateMinutes`: `number`, `attendedAt`, `latitude`, `longitude`, `distanceMeters` | ID deterministik; status kehadiran tidak berubah akibat pembayaran denda. |
+| `labs/{labId}` | `courseName`, `building`, `latitude`, `longitude`, `radiusMeters`, `gracePeriodMinutes` (default `15`), `lateFineAmount`, `assistantIds`, `aslabIds` | Konfigurasi lokasi dan kebijakan dasar lab. Waktu sesi menggunakan `Asia/Jakarta`; kebijakan sesi dapat meng-override kebijakan lab. |
+| `sessions/{sessionId}` | `labId`, `labName`, `gracePeriodMinutes` *(opsional override)*, `lateFineAmount` *(opsional override)* | Jadwal sesi yang tertaut ke laboratorium. Jika override toleransi tidak ada, gunakan `labs/{labId}.gracePeriodMinutes`. |
+| `attendance/{sessionId}_{studentId}` | `attendanceStatus`: `'on_time' \| 'late' \| 'excused_absence'`, `lateMinutes`: `number`, `attendedAt`, `latitude`, `longitude`, `distanceMeters` | ID deterministik. Batas grace period inklusif: tepat pada menit ke-15 masih `on_time`. Backend menetapkan status `late` dan membuat dendanya; pembayaran tidak mengubah status kehadiran. |
 | `fines/{sessionId}_{studentId}` | `studentId`, `studentName`, `studentIdentifier`, `sessionId`, `classId`, `labId`, `attendanceId`, `practicalName`, `sessionDate`, `amount`, `lateMinutes`, `status`: `'pending' \| 'paid'`, `latestTransactionId`, `createdAt`, `paidAt` | ID deterministik → satu kejadian keterlambatan hanya menghasilkan satu tagihan denda. |
 | `paymentTransactions/{orderId}` | `orderId`, `fineId`, `sessionId`, `studentId`, `amount`, `paymentType`, `snapToken`, `redirectUrl`, `status`: `'pending' \| 'success' \| 'failed'`, `midtransTransactionStatus`, `paidAt`, `createdAt`, `updatedAt` | Riwayat transaksi persisten; status final hanya ditulis oleh backend setelah verifikasi webhook Midtrans. |
 
