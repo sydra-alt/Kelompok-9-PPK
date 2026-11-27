@@ -2,7 +2,6 @@ import { useEffect, useRef, useState } from 'react';
 import {
   FlatList,
   KeyboardAvoidingView,
-  Modal,
   Platform,
   Pressable,
   ScrollView,
@@ -14,6 +13,9 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { AppButton } from '@/components/AppButton';
+import Animated, { ZoomIn, ZoomOut } from 'react-native-reanimated';
+
+import { AnimatedModal, ModalMotion } from '@/components/ModalMotion';
 import { AppColors, Radius } from '@/constants/app-theme';
 import { Spacing } from '@/constants/theme';
 import type { Lab, PracticeClass, PracticeSession } from '@/types';
@@ -78,15 +80,12 @@ export function SessionFormModal({
   onClose,
   onSubmit,
 }: SessionFormModalProps) {
-  if (!visible) return null;
-
   return (
-    <Modal
+    <AnimatedModal
       visible={visible}
-      transparent
-      animationType="fade"
+      variant="sheet"
       onRequestClose={onClose}
-      statusBarTranslucent>
+      >
       <View style={styles.backdrop}>
         <SessionFormContent
           key={initialData?.id ?? 'new-session'}
@@ -98,7 +97,7 @@ export function SessionFormModal({
           onSubmit={onSubmit}
         />
       </View>
-    </Modal>
+    </AnimatedModal>
   );
 }
 
@@ -244,7 +243,8 @@ function SessionFormContent({
     <KeyboardAvoidingView
       behavior={Platform.OS === 'ios' ? 'padding' : undefined}
       style={styles.keyboardView}>
-      <View style={styles.card} accessibilityViewIsModal>
+        <ModalMotion variant="sheet" style={styles.card}>
+        <View style={styles.sheetContent} accessibilityViewIsModal>
         <View style={styles.sheetHeader}>
           <View style={styles.sheetHeading}>
           <Text style={styles.title}>
@@ -415,7 +415,8 @@ function SessionFormContent({
         {activePicker ? (
           <View style={styles.pickerLayer}>
             <Pressable style={styles.pickerDim} onPress={() => setActivePicker(null)} />
-            <View style={styles.pickerPopup}>
+            <Animated.View entering={ZoomIn.duration(180)} exiting={ZoomOut.duration(140)} style={styles.pickerPopup}>
+            <View>
               <View style={styles.pickerPopupHeader}>
                 <Text style={styles.pickerPopupTitle}>
                   {activePicker === 'date'
@@ -453,9 +454,11 @@ function SessionFormContent({
                 />
               )}
             </View>
+            </Animated.View>
           </View>
         ) : null}
       </View>
+      </ModalMotion>
     </KeyboardAvoidingView>
   );
 }
@@ -701,6 +704,10 @@ const styles = StyleSheet.create({
     flex: 1,
     width: '100%',
     maxWidth: 560,
+  },
+  sheetContent: {
+    flex: 1,
+    width: '100%',
     paddingTop: Spacing.four,
     paddingHorizontal: Spacing.four,
     borderTopLeftRadius: Radius.xl,

@@ -1,6 +1,7 @@
-import { Modal, Pressable, StyleSheet, Text, View } from 'react-native';
+import { Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { AppButton } from '@/components/AppButton';
+import { AnimatedModal, ModalMotion } from '@/components/ModalMotion';
 import { AppColors, Radius } from '@/constants/app-theme';
 import { Spacing } from '@/constants/theme';
 
@@ -23,14 +24,14 @@ export function ConfirmDeleteModal({
   loading = false,
 }: ConfirmDeleteModalProps) {
   return (
-    <Modal
+    <AnimatedModal
       visible={visible}
-      transparent
-      animationType="fade"
+      variant="popup"
       onRequestClose={onCancel}
-      statusBarTranslucent>
+      >
       <View style={styles.backdrop}>
-        <View style={styles.card} accessibilityViewIsModal>
+        <ModalMotion variant="popup" style={styles.card}>
+        <View accessibilityViewIsModal>
           <View style={styles.iconWrap}>
             <Text style={styles.icon}>🗑️</Text>
           </View>
@@ -52,8 +53,9 @@ export function ConfirmDeleteModal({
             />
           </View>
         </View>
+        </ModalMotion>
       </View>
-    </Modal>
+    </AnimatedModal>
   );
 }
 

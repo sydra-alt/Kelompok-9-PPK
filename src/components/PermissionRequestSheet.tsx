@@ -1,7 +1,6 @@
 import { useState } from 'react';
 import {
   KeyboardAvoidingView,
-  Modal,
   Platform,
   Pressable,
   StyleSheet,
@@ -12,6 +11,7 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { AppButton } from '@/components/AppButton';
+import { AnimatedModal, ModalMotion } from '@/components/ModalMotion';
 import { AppColors, Radius } from '@/constants/app-theme';
 import { Spacing } from '@/constants/theme';
 import {
@@ -68,10 +68,9 @@ export function PermissionRequestSheet({
   };
 
   return (
-    <Modal
+    <AnimatedModal
       visible={visible}
-      transparent
-      animationType="fade"
+      variant="sheet"
       onShow={resetForm}
       onRequestClose={onCancel}>
       <KeyboardAvoidingView
@@ -82,7 +81,8 @@ export function PermissionRequestSheet({
           onPress={submitting ? undefined : onCancel}
           accessibilityLabel="Tutup form pengajuan izin"
         />
-        <View style={[styles.sheet, { paddingBottom: insets.bottom + Spacing.four }]}>
+        <ModalMotion variant="sheet" style={[styles.sheet, { paddingBottom: insets.bottom + Spacing.four }]}>
+        <View>
           <View style={styles.handle} />
           <Text style={styles.title}>Ajukan Izin Praktikum</Text>
           <Text style={styles.subtitle}>
@@ -173,8 +173,9 @@ export function PermissionRequestSheet({
             />
           </View>
         </View>
+        </ModalMotion>
       </KeyboardAvoidingView>
-    </Modal>
+    </AnimatedModal>
   );
 }
 

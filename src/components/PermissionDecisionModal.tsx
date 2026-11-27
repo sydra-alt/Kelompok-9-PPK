@@ -1,7 +1,6 @@
 import { useState } from 'react';
 import {
   KeyboardAvoidingView,
-  Modal,
   Platform,
   Pressable,
   ScrollView,
@@ -12,6 +11,7 @@ import {
 } from 'react-native';
 
 import { AiCategoryChip, PermissionStatusBadge } from '@/components/PermissionStatusBadge';
+import { AnimatedModal, ModalMotion } from '@/components/ModalMotion';
 import { AppColors, Radius } from '@/constants/app-theme';
 import { Spacing } from '@/constants/theme';
 import type { PermissionRequest, PermissionStatus } from '@/types';
@@ -30,24 +30,28 @@ export function PermissionDecisionModal({
   onClose,
   onDecide,
 }: PermissionDecisionModalProps) {
-  if (!visible || !request) return null;
+  const [lastRequest, setLastRequest] = useState(request);
+  if (request && request !== lastRequest) setLastRequest(request);
+
+  const displayRequest = request ?? lastRequest;
 
   return (
-    <Modal
-      visible={visible}
-      transparent
-      animationType="fade"
+    <AnimatedModal
+      visible={visible && Boolean(displayRequest)}
+      variant="popup"
       onRequestClose={onClose}
-      statusBarTranslucent>
+      >
       <View style={styles.backdrop}>
-        <PermissionDecisionContent
-          key={request.id}
-          request={request}
-          onClose={onClose}
-          onDecide={onDecide}
-        />
+        {displayRequest ? (
+          <PermissionDecisionContent
+            key={displayRequest.id}
+            request={displayRequest}
+            onClose={onClose}
+            onDecide={onDecide}
+          />
+        ) : null}
       </View>
-    </Modal>
+    </AnimatedModal>
   );
 }
 
@@ -81,7 +85,8 @@ function PermissionDecisionContent({
     <KeyboardAvoidingView
       behavior={Platform.OS === 'ios' ? 'padding' : undefined}
       style={styles.keyboardView}>
-      <View style={styles.card} accessibilityViewIsModal>
+      <ModalMotion variant="popup" style={styles.card}>
+      <View accessibilityViewIsModal>
         <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scroll}>
           <View style={styles.headerRow}>
             <View style={styles.titleBlock}>
@@ -182,6 +187,7 @@ function PermissionDecisionContent({
           </View>
         </ScrollView>
       </View>
+      </ModalMotion>
     </KeyboardAvoidingView>
   );
 }
@@ -380,4 +386,3 @@ const styles = StyleSheet.create({
     opacity: 0.6,
   },
 });
-

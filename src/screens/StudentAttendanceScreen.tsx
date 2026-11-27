@@ -1,9 +1,10 @@
 import { router, useLocalSearchParams } from 'expo-router';
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { Linking, Modal, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Linking, ScrollView, StyleSheet, Text, View } from 'react-native';
 
 import { AppButton } from '@/components/AppButton';
 import { ConnectionBanner } from '@/components/ConnectionBanner';
+import { AnimatedModal, ModalMotion } from '@/components/ModalMotion';
 import { EmptyState } from '@/components/EmptyState';
 import { LoadingState } from '@/components/LoadingState';
 import { StatusBadge } from '@/components/StatusBadge';
@@ -218,13 +219,13 @@ export default function StudentAttendanceScreen() {
         />
       </View>
     </ScrollView>
-    <Modal
+    <AnimatedModal
       visible={successModalMessage !== null}
-      transparent
-      animationType="fade"
+      variant="popup"
       onRequestClose={() => setSuccessModalMessage(null)}>
       <View style={styles.modalBackdrop}>
-        <View style={styles.successModal} accessibilityViewIsModal>
+        <ModalMotion variant="popup" style={styles.successModal}>
+        <View accessibilityViewIsModal>
           <View style={styles.successIcon}><Text style={styles.successIconText}>✓</Text></View>
           <Text style={styles.successTitle}>Presensi Berhasil</Text>
           <Text style={styles.successMessage}>{successModalMessage}</Text>
@@ -236,8 +237,9 @@ export default function StudentAttendanceScreen() {
             }}
           />
         </View>
+        </ModalMotion>
       </View>
-    </Modal>
+    </AnimatedModal>
     </>
   );
 }
