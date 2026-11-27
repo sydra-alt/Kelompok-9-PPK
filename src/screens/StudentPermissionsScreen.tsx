@@ -1,6 +1,6 @@
 import { router } from 'expo-router';
 import { useMemo, useState } from 'react';
-import { FlatList, Pressable, StyleSheet, Text, View } from 'react-native';
+import { Alert, FlatList, Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { ConnectionBanner } from '@/components/ConnectionBanner';
 import { EmptyState } from '@/components/EmptyState';
@@ -12,6 +12,7 @@ import { useAuth } from '@/context/AuthContext';
 import { useStudentData } from '@/context/StudentDataContext';
 import { navigateTo } from '@/navigation/AppNavigator';
 import { classifyPermissionRequest } from '@/services/permission-service';
+import { getErrorMessage } from '@/services/errors';
 import type { PermissionRequest, PermissionStatus } from '@/types';
 import { formatDate, formatDateTime } from '@/utils/format';
 
@@ -70,6 +71,8 @@ export default function StudentPermissionsScreen() {
     setRetryingAiId(item.id);
     try {
       await classifyPermissionRequest(item.id, item.reason);
+    } catch (err) {
+      Alert.alert('Analisis gagal disimpan', getErrorMessage(err, 'Periksa koneksi lalu coba lagi.'));
     } finally {
       setRetryingAiId(null);
     }
@@ -197,7 +200,7 @@ function PermissionRequestCard({
 
       <View style={styles.aiRow}>
         <AiSentimentChip classification={item.aiClassification} />
-        {item.aiClassification.status === 'failed' ? (
+        {item.aiClassification.status !== 'success' ? (
           <Pressable
             testID={`retry-ai-${item.id}`}
             disabled={retryingAi}

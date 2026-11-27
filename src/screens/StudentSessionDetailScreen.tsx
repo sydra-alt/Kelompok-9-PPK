@@ -166,7 +166,7 @@ export default function StudentSessionDetailScreen() {
         type: 'success',
         title: 'Pengajuan izin terkirim',
         message:
-          'Pengajuan izin disimpan dengan status Menunggu Keputusan. Analisis sentimen lokal sedang diproses sebagai informasi pendukung.',
+          'Pengajuan izin tersimpan dan menunggu keputusan asisten. Analisis sentimen EDOM tersedia sebagai informasi pendukung.',
       });
     } catch (err) {
       setPermissionSheetVisible(false);
@@ -185,6 +185,17 @@ export default function StudentSessionDetailScreen() {
     setRetryingAi(true);
     try {
       await classifyPermissionRequest(myPermission.id, myPermission.reason);
+      setFeedback({
+        type: 'success',
+        title: 'Analisis selesai',
+        message: 'Hasil analisis sentimen berhasil diperbarui.',
+      });
+    } catch (err) {
+      setFeedback({
+        type: 'error',
+        title: 'Analisis gagal disimpan',
+        message: getErrorMessage(err, 'Periksa koneksi dan izin akun, lalu coba lagi.'),
+      });
     } finally {
       setRetryingAi(false);
     }
@@ -324,7 +335,7 @@ export default function StudentSessionDetailScreen() {
 
               <View style={styles.aiSection}>
                 <AiSentimentChip classification={myPermission.aiClassification} />
-                {myPermission.aiClassification.status === 'failed' ? (
+                {myPermission.aiClassification.status !== 'success' ? (
                   <Pressable
                     testID="retry-ai-button"
                     disabled={retryingAi}
