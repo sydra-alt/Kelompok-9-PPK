@@ -20,7 +20,7 @@ import { LabFormModal } from '@/components/LabFormModal';
 import { LoadingState } from '@/components/LoadingState';
 import { MemberFormModal } from '@/components/MemberFormModal';
 import { PermissionDecisionModal } from '@/components/PermissionDecisionModal';
-import { AiCategoryChip, PermissionStatusBadge } from '@/components/PermissionStatusBadge';
+import { AiSentimentChip, PermissionStatusBadge } from '@/components/PermissionStatusBadge';
 import { SessionCard } from '@/components/SessionCard';
 import { SessionFormModal } from '@/components/SessionFormModal';
 import { AppColors, CardShadow, Radius } from '@/constants/app-theme';
@@ -245,7 +245,7 @@ export default function AssistantHomeScreen() {
       <View style={styles.loadingContainer}>
         <LoadingState
           title="Memuat data asisten..."
-          message="Menghubungkan ke Firestore dan menyinkronkan data praktikum."
+          message="Menyiapkan jadwal dan data praktikum."
         />
       </View>
     );
@@ -330,14 +330,6 @@ export default function AssistantHomeScreen() {
                 onClose={() => setFeedback(null)}
               />
             ) : null}
-
-            {/* Tombol Cepat Rekap Presensi */}
-            <AppButton
-              testID="open-attendance-recap"
-              title="📊 Buka Rekap Presensi Real-Time"
-              variant="secondary"
-              onPress={() => navigateTo.assistantRecap(profile?.uid ?? assistantIdentifier)}
-            />
 
             {/* Tab Navigation */}
             <View style={styles.tabBar}>
@@ -574,7 +566,7 @@ export default function AssistantHomeScreen() {
                         </View>
 
                         <View style={styles.aiBox}>
-                          <AiCategoryChip classification={req.aiClassification} />
+                          <AiSentimentChip classification={req.aiClassification} />
                         </View>
 
                         {req.decisionNote ? (

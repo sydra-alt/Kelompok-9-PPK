@@ -37,6 +37,7 @@ import type {
   PracticeSession,
   UserProfile,
 } from '@/types';
+import { getJakartaNowParts, isSessionStartAllowed, isWithinSessionWindow } from '@/utils/session-time';
 
 /**
  * Layanan data dan operasi praktikum untuk asisten.
@@ -59,8 +60,16 @@ export type OnError = (error: unknown) => void;
 const WRITE_TIMEOUT_MS = 15000;
 const MAX_IN_VALUES = 30;
 
-const bySchedule = (a: PracticeSession, b: PracticeSession) =>
-  `${a.date}${a.startTime}`.localeCompare(`${b.date}${b.startTime}`);
+const bySchedule = (a: PracticeSession, b: PracticeSession) => {
+  const now = getJakartaNowParts();
+  const nowKey = `${now.date}T${now.time}`;
+  const aKey = `${a.date}T${a.startTime}`;
+  const bKey = `${b.date}T${b.startTime}`;
+  const aUpcoming = (a.status === 'open' && isWithinSessionWindow(a)) || aKey >= nowKey;
+  const bUpcoming = (b.status === 'open' && isWithinSessionWindow(b)) || bKey >= nowKey;
+  if (aUpcoming !== bUpcoming) return aUpcoming ? -1 : 1;
+  return aUpcoming ? aKey.localeCompare(bKey) : bKey.localeCompare(aKey);
+};
 
 // ---------------------------------------------------------------------------
 // Kelas (classes) — Read & CRUD
@@ -340,6 +349,9 @@ export function validateSessionInput(input: CreateSessionInput): string | null {
   if (!endTime) return 'Waktu selesai wajib diisi.';
   if (!TIME_PATTERN.test(endTime)) return 'Format waktu selesai harus HH:mm (mis. 10:00).';
   if (startTime >= endTime) return 'Waktu mulai harus sebelum waktu selesai.';
+  if (!isSessionStartAllowed(date, startTime)) {
+    return 'Untuk sesi baru, tanggal dan waktu mulai harus sekarang atau setelahnya.';
+  }
   return null;
 }
 
@@ -449,6 +461,17 @@ export async function updateSessionStatus(
   sessionId: string,
   status: 'open' | 'closed',
 ): Promise<void> {
+  if (status === 'open') {
+    const snapshot = await withTimeout(
+      getDoc(doc(getDb(), COLLECTIONS.sessions, sessionId)),
+      WRITE_TIMEOUT_MS,
+      'Gagal memeriksa jadwal sesi. Periksa koneksi lalu coba lagi.',
+    );
+    if (!snapshot.exists() || !isWithinSessionWindow(toPracticeSession(snapshot))) {
+      throw new AppError('outside-session-window', 'Sesi hanya dapat dibuka pada tanggal dan jam praktikum yang dijadwalkan.');
+    }
+  }
+
   await withTimeout(
     updateDoc(doc(getDb(), COLLECTIONS.sessions, sessionId), {
       status,

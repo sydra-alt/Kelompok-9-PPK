@@ -1,7 +1,8 @@
 import { useState } from 'react';
-import { Modal, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
+import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 
 import { AppButton } from '@/components/AppButton';
+import { AnimatedModal, ModalMotion } from '@/components/ModalMotion';
 import { AppColors, Radius } from '@/constants/app-theme';
 import { Spacing } from '@/constants/theme';
 import type { PracticeClass } from '@/types';
@@ -19,24 +20,23 @@ export function ClassFormModal({
   onClose,
   onSubmit,
 }: ClassFormModalProps) {
-  if (!visible) return null;
-
   return (
-    <Modal
+    <AnimatedModal
       visible={visible}
-      transparent
-      animationType="fade"
+      variant="popup"
       onRequestClose={onClose}
-      statusBarTranslucent>
+      >
       <View style={styles.backdrop}>
-        <ClassFormContent
-          key={initialData?.id ?? 'new-class'}
-          initialData={initialData}
-          onClose={onClose}
-          onSubmit={onSubmit}
-        />
+        <ModalMotion variant="popup" style={styles.motion}>
+          <ClassFormContent
+            key={initialData?.id ?? 'new-class'}
+            initialData={initialData}
+            onClose={onClose}
+            onSubmit={onSubmit}
+          />
+        </ModalMotion>
       </View>
-    </Modal>
+    </AnimatedModal>
   );
 }
 
@@ -156,6 +156,7 @@ const styles = StyleSheet.create({
     backgroundColor: AppColors.surface,
     gap: Spacing.three,
   },
+  motion: { width: '100%', maxWidth: 440 },
   title: {
     color: AppColors.text,
     fontSize: 20,

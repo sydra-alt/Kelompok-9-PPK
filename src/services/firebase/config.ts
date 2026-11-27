@@ -36,15 +36,3 @@ export const missingFirebaseEnv: string[] = REQUIRED_KEYS.filter(({ key }) => !f
 export const isFirebaseConfigured = missingFirebaseEnv.length === 0;
 
 export const firebaseOptions: FirebaseOptions = firebaseEnv;
-
-/**
- * Konfigurasi API AI klasifikasi alasan izin (disediakan pengajar).
- * Bersifat opsional: bila URL kosong, klasifikasi dilewati (`skipped`) dan
- * pengajuan tetap tersimpan.
- */
-export const aiClassifierConfig = {
-  url: process.env.EXPO_PUBLIC_AI_CLASSIFIER_URL ?? '',
-  apiKey: process.env.EXPO_PUBLIC_AI_CLASSIFIER_API_KEY ?? '',
-  timeoutMs: Number(process.env.EXPO_PUBLIC_AI_CLASSIFIER_TIMEOUT_MS ?? 10000) || 10000,
-};
-

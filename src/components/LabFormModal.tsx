@@ -1,7 +1,6 @@
 import { useState } from 'react';
 import {
   KeyboardAvoidingView,
-  Modal,
   Platform,
   Pressable,
   ScrollView,
@@ -12,6 +11,7 @@ import {
 } from 'react-native';
 
 import { AppButton } from '@/components/AppButton';
+import { AnimatedModal, ModalMotion } from '@/components/ModalMotion';
 import { AppColors, Radius } from '@/constants/app-theme';
 import { Spacing } from '@/constants/theme';
 import { getErrorMessage } from '@/services/errors';
@@ -29,24 +29,23 @@ interface LabFormModalProps {
 const RADIUS_PRESETS = [50, 100, 200, 300];
 
 export function LabFormModal({ visible, initialData, onClose, onSubmit }: LabFormModalProps) {
-  if (!visible) return null;
-
   return (
-    <Modal
+    <AnimatedModal
       visible={visible}
-      transparent
-      animationType="fade"
+      variant="popup"
       onRequestClose={onClose}
-      statusBarTranslucent>
+      >
       <View style={styles.backdrop}>
-        <LabFormContent
-          key={initialData?.id ?? 'new-lab'}
-          initialData={initialData}
-          onClose={onClose}
-          onSubmit={onSubmit}
-        />
+        <ModalMotion variant="popup" style={styles.motion}>
+          <LabFormContent
+            key={initialData?.id ?? 'new-lab'}
+            initialData={initialData}
+            onClose={onClose}
+            onSubmit={onSubmit}
+          />
+        </ModalMotion>
       </View>
-    </Modal>
+    </AnimatedModal>
   );
 }
 
@@ -288,6 +287,7 @@ const styles = StyleSheet.create({
     padding: Spacing.four,
     backgroundColor: AppColors.overlay,
   },
+  motion: { width: '100%', maxWidth: 560, maxHeight: '94%' },
   keyboardView: {
     width: '100%',
     maxWidth: 480,

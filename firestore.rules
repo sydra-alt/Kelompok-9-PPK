@@ -97,6 +97,7 @@ service cloud.firestore {
                     && request.resource.data.role == 'praktikan'
                     && request.resource.data.name is string
                     && request.resource.data.identifier is string
+                    && request.resource.data.identifier.matches('^[0-9]{5,20}$')
                     && (!('pushTokens' in request.resource.data)
                       || (request.resource.data.pushTokens is list
                           && request.resource.data.pushTokens.size() <= 20));
@@ -106,6 +107,9 @@ service cloud.firestore {
       allow update: if isOwner(userId)
                     && request.resource.data.get('uid', userId) == resource.data.get('uid', userId)
                     && request.resource.data.role == resource.data.role
+                    && (request.resource.data.role != 'praktikan'
+                      || (request.resource.data.identifier is string
+                        && request.resource.data.identifier.matches('^[0-9]{5,20}$')))
                     && request.resource.data.diff(resource.data).affectedKeys()
                         .hasOnly(['name', 'identifier', 'email', 'pushTokens', 'pushTokenUpdatedAt', 'updatedAt'])
                     && (!('pushTokens' in request.resource.data)
@@ -245,7 +249,7 @@ service cloud.firestore {
 
       // Pembaruan izin:
       // - Asisten: menetapkan keputusan ('approved' / 'rejected'), mengisi decidedBy, decidedAt
-      // - Praktikan: HANYA memperbarui field aiClassification saat hasil klasifikasi AI diterima
+      // - Praktikan: HANYA memperbarui field aiClassification saat hasil sentimen lokal tersedia
       allow update: if (
         isAssistant()
         && request.resource.data.status in ['approved', 'rejected']

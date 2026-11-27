@@ -39,21 +39,16 @@ export function PermissionStatusBadge({ status }: { status: PermissionStatus }) 
 }
 
 /**
- * Chip informasi pendukung hasil klasifikasi AI.
+ * Chip informasi pendukung hasil analisis sentimen lokal.
  * Ditampilkan terpisah dari status keputusan asisten.
  */
-export function AiCategoryChip({ classification }: { classification: AiClassification }) {
-  if (classification.status === 'success' && classification.category) {
-    const confidenceText =
-      typeof classification.confidence === 'number'
-        ? ` (${Math.round(classification.confidence * 100)}%)`
-        : '';
+export function AiSentimentChip({ classification }: { classification: AiClassification }) {
+  if (classification.status === 'success' && classification.sentiment) {
     return (
       <View style={[styles.badge, { backgroundColor: AppColors.primarySoft }]}>
         <Text style={styles.icon}>🤖</Text>
         <Text style={[styles.label, { color: AppColors.primaryDark }]}>
-          Kategori AI: {classification.category}
-          {confidenceText}
+          Sentimen AI: {classification.sentiment}
         </Text>
       </View>
     );
@@ -63,7 +58,7 @@ export function AiCategoryChip({ classification }: { classification: AiClassific
     return (
       <View style={[styles.badge, { backgroundColor: AppColors.neutralSoft }]}>
         <Text style={styles.icon}>🤖</Text>
-        <Text style={[styles.label, { color: AppColors.neutral }]}>Klasifikasi AI sedang diproses...</Text>
+        <Text style={[styles.label, { color: AppColors.neutral }]}>Analisis sentimen lokal sedang diproses...</Text>
       </View>
     );
   }
@@ -73,7 +68,7 @@ export function AiCategoryChip({ classification }: { classification: AiClassific
       <View style={[styles.badge, { backgroundColor: AppColors.warningSoft }]}>
         <Text style={styles.icon}>🤖</Text>
         <Text style={[styles.label, { color: AppColors.warning }]}>
-          Tanpa klasifikasi AI (tetap diproses asisten)
+          Sentimen tidak tersedia (tetap diproses asisten)
         </Text>
       </View>
     );
@@ -82,7 +77,7 @@ export function AiCategoryChip({ classification }: { classification: AiClassific
   return (
     <View style={[styles.badge, { backgroundColor: AppColors.neutralSoft }]}>
       <Text style={styles.icon}>🤖</Text>
-      <Text style={[styles.label, { color: AppColors.neutral }]}>Klasifikasi AI tidak aktif</Text>
+      <Text style={[styles.label, { color: AppColors.neutral }]}>Hasil sentimen tidak tersedia</Text>
     </View>
   );
 }
@@ -105,4 +100,3 @@ const styles = StyleSheet.create({
     fontWeight: '700',
   },
 });
-

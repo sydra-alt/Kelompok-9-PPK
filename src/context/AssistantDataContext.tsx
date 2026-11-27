@@ -4,6 +4,7 @@ import {
   useContext,
   useEffect,
   useMemo,
+  useRef,
   useState,
   type PropsWithChildren,
 } from 'react';
@@ -59,6 +60,7 @@ import type {
   PracticeSession,
   SessionStatus,
 } from '@/types';
+import { hasSessionEnded, isWithinSessionWindow } from '@/utils/session-time';
 
 /**
  * Provider data real-time khusus asisten.
@@ -131,6 +133,7 @@ export function AssistantDataProvider({ children }: PropsWithChildren) {
 
   const [retryKey, setRetryKey] = useState(0);
   const [errorState, setErrorState] = useState<{ key: string; message: string } | null>(null);
+  const autoClosingSessionIds = useRef(new Set<string>());
 
   const assistantScopeKey = assistantUid ? `${assistantUid}:${retryKey}` : null;
 
@@ -304,6 +307,38 @@ export function AssistantDataProvider({ children }: PropsWithChildren) {
     () => (classScopeKey && sessionsSnap?.key === classScopeKey ? sessionsSnap.data : []),
     [classScopeKey, sessionsSnap],
   );
+
+  // Close expired open sessions while an authenticated assistant client is active.
+  // The Firestore write is idempotent; the server should also enforce expiration
+  // for sessions when no assistant app is running.
+  useEffect(() => {
+    if (!assistantUid) return undefined;
+
+    const closeExpiredSessions = () => {
+      const now = new Date();
+      for (const session of sessions) {
+        if (
+          session.status !== 'open' ||
+          !hasSessionEnded(session, now) ||
+          autoClosingSessionIds.current.has(session.id)
+        ) continue;
+
+        autoClosingSessionIds.current.add(session.id);
+        void serviceUpdateSessionStatus(session.id, 'closed')
+          .catch((cause: unknown) => {
+            setErrorState({
+              key: assistantScopeKey ?? assistantUid,
+              message: getErrorMessage(cause, 'Sesi berakhir tetapi gagal ditutup otomatis. Periksa koneksi lalu coba lagi.'),
+            });
+          })
+          .finally(() => autoClosingSessionIds.current.delete(session.id));
+      }
+    };
+
+    closeExpiredSessions();
+    const timer = setInterval(closeExpiredSessions, 15000);
+    return () => clearInterval(timer);
+  }, [assistantUid, assistantScopeKey, sessions]);
   const members = useMemo(
     () => (classScopeKey && membersSnap?.key === classScopeKey ? membersSnap.data : []),
     [classScopeKey, membersSnap],
@@ -432,6 +467,12 @@ export function AssistantDataProvider({ children }: PropsWithChildren) {
         throw new Error('Status tidak dapat dikembalikan ke scheduled.');
       }
       const existing = sessions.find((item) => item.id === sessionId);
+      if (nextStatus === 'open') {
+        const targetSession = existing ?? (await getSessionById(sessionId));
+        if (!targetSession || !isWithinSessionWindow(targetSession)) {
+          throw new Error('Sesi hanya dapat dibuka pada tanggal dan jam praktikum yang dijadwalkan.');
+        }
+      }
       await serviceUpdateSessionStatus(sessionId, nextStatus);
 
       if (nextStatus !== 'open') {

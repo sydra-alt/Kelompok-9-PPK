@@ -1,7 +1,8 @@
 import { useState } from 'react';
-import { Modal, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
+import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 
 import { AppButton } from '@/components/AppButton';
+import { AnimatedModal, ModalMotion } from '@/components/ModalMotion';
 import { AppColors, Radius } from '@/constants/app-theme';
 import { Spacing } from '@/constants/theme';
 import type { PracticeClass, UserProfile } from '@/types';
@@ -90,13 +91,13 @@ export function MemberFormModal({
   };
 
   return (
-    <Modal
+    <AnimatedModal
       visible={visible}
-      transparent
-      animationType="fade"
+      variant="popup"
       onRequestClose={onClose}
-      statusBarTranslucent>
+      >
       <View style={styles.backdrop}>
+        <ModalMotion variant="popup" style={styles.motion}>
         <View style={styles.card} accessibilityViewIsModal>
           <Text style={styles.title}>Tambah Peserta Praktikum</Text>
           <Text style={styles.subtitle}>Cari akun praktikan menggunakan NIM. UID akan dihubungkan otomatis.</Text>
@@ -158,12 +159,14 @@ export function MemberFormModal({
             />
           </View>
         </View>
+        </ModalMotion>
       </View>
-    </Modal>
+    </AnimatedModal>
   );
 }
 
 const styles = StyleSheet.create({
+  motion: { width: '100%', maxWidth: 440 },
   backdrop: {
     flex: 1,
     justifyContent: 'center',

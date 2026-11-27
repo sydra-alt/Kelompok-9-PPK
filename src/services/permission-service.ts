@@ -11,10 +11,9 @@ import type { UserProfile } from '@/types';
  *
  * Alur:
  * 1. Validasi alasan di client (`validatePermissionReason`).
- * 2. Simpan `permissionRequests/{sessionId}_{uid}` via transaksi dengan
- *    `status: 'pending'` dan `aiClassification.status: 'pending'`.
- * 3. Panggil API AI di latar belakang lalu perbarui HANYA field
- *    `aiClassification`. Kegagalan API tidak membatalkan pengajuan.
+ * 2. Jalankan model sentimen EDOM lokal pada alasan.
+ * 3. Simpan pengajuan dan hasil analisis pada transaksi yang sama. Jika model
+ *    tidak mengenali teks, pengajuan tetap tersimpan dengan status analisis gagal.
  */
 
 export const REASON_MIN_LENGTH = 10;
@@ -29,7 +28,7 @@ export function validatePermissionReason(reason: string): string | null {
   return null;
 }
 
-/** Simpan pengajuan izin lalu jalankan klasifikasi AI (tidak ditunggu). Mengembalikan ID pengajuan. */
+/** Analisis alasan secara lokal lalu simpan pengajuan dan hasilnya bersama-sama. */
 export async function submitPermissionRequest(
   student: UserProfile,
   sessionId: string,
@@ -43,6 +42,10 @@ export async function submitPermissionRequest(
   const sessionRef = doc(db, COLLECTIONS.sessions, sessionId);
   const requestRef = doc(db, COLLECTIONS.permissionRequests, requestId);
   const trimmedReason = reason.trim();
+  const outcome = classifyReason(trimmedReason);
+  const aiClassification = outcome.ok
+    ? { status: 'success', sentiment: outcome.sentiment, confidence: null, error: null }
+    : { status: 'failed', sentiment: null, confidence: null, error: outcome.error };
 
   const transaction = runTransaction(db, async (tx) => {
     const sessionSnap = await tx.get(sessionRef);
@@ -69,7 +72,7 @@ export async function submitPermissionRequest(
       sessionDate: session.date,
       reason: trimmedReason,
       status: 'pending',
-      aiClassification: { status: 'pending', category: null, confidence: null, error: null },
+      aiClassification: { ...aiClassification, classifiedAt: serverTimestamp() },
       createdAt: serverTimestamp(),
       updatedAt: serverTimestamp(),
       decidedAt: null,
@@ -85,29 +88,21 @@ export async function submitPermissionRequest(
     'Pengajuan gagal dikirim karena koneksi ke server terlalu lama. Coba lagi.',
   );
 
-  // Klasifikasi berjalan di latar belakang; pengajuan sudah tersimpan.
-  void classifyPermissionRequest(requestId, trimmedReason);
   return requestId;
 }
 
 /**
- * Panggil API AI dan simpan hasilnya ke `aiClassification`. Aman dipanggil
- * ulang (tombol "Coba klasifikasi lagi"). Tidak pernah melempar error.
+ * Jalankan model lokal dan simpan hasilnya ke `aiClassification`. Aman dipanggil
+ * ulang (tombol "Coba analisis ulang"). Error penyimpanan diteruskan ke layar.
  */
 export async function classifyPermissionRequest(requestId: string, reason: string): Promise<void> {
   const outcome = await classifyReason(reason);
   const aiClassification = outcome.ok
-    ? { status: 'success', category: outcome.category, confidence: outcome.confidence, error: null }
-    : { status: outcome.skipped ? 'skipped' : 'failed', category: null, confidence: null, error: outcome.error };
+    ? { status: 'success', sentiment: outcome.sentiment, confidence: null, error: null }
+    : { status: 'failed', sentiment: null, confidence: null, error: outcome.error };
 
-  try {
-    await updateDoc(doc(getDb(), COLLECTIONS.permissionRequests, requestId), {
-      aiClassification: { ...aiClassification, classifiedAt: serverTimestamp() },
-      updatedAt: serverTimestamp(),
-    });
-  } catch {
-    // Gagal menyimpan hasil AI tidak memengaruhi pengajuan; status tetap `pending`
-    // dan praktikan dapat mencoba klasifikasi ulang dari daftar pengajuan.
-  }
+  await updateDoc(doc(getDb(), COLLECTIONS.permissionRequests, requestId), {
+    aiClassification: { ...aiClassification, classifiedAt: serverTimestamp() },
+    updatedAt: serverTimestamp(),
+  });
 }
-

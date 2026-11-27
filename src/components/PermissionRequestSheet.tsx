@@ -1,7 +1,6 @@
 import { useState } from 'react';
 import {
   KeyboardAvoidingView,
-  Modal,
   Platform,
   Pressable,
   StyleSheet,
@@ -12,6 +11,7 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { AppButton } from '@/components/AppButton';
+import { AnimatedModal, ModalMotion } from '@/components/ModalMotion';
 import { AppColors, Radius } from '@/constants/app-theme';
 import { Spacing } from '@/constants/theme';
 import {
@@ -38,7 +38,7 @@ const QUICK_TEMPLATES = [
 
 /**
  * Bottom sheet pengajuan izin untuk sesi tertentu.
- * Memvalidasi panjang alasan sebelum mengirim ke Firestore & API AI.
+ * Memvalidasi panjang alasan sebelum menyimpan ke Firestore dan menganalisis sentimen lokal.
  */
 export function PermissionRequestSheet({
   visible,
@@ -68,10 +68,9 @@ export function PermissionRequestSheet({
   };
 
   return (
-    <Modal
+    <AnimatedModal
       visible={visible}
-      transparent
-      animationType="slide"
+      variant="sheet"
       onShow={resetForm}
       onRequestClose={onCancel}>
       <KeyboardAvoidingView
@@ -82,7 +81,8 @@ export function PermissionRequestSheet({
           onPress={submitting ? undefined : onCancel}
           accessibilityLabel="Tutup form pengajuan izin"
         />
-        <View style={[styles.sheet, { paddingBottom: insets.bottom + Spacing.four }]}>
+        <ModalMotion variant="sheet" style={[styles.sheet, { paddingBottom: insets.bottom + Spacing.four }]}>
+        <View>
           <View style={styles.handle} />
           <Text style={styles.title}>Ajukan Izin Praktikum</Text>
           <Text style={styles.subtitle}>
@@ -151,8 +151,9 @@ export function PermissionRequestSheet({
           <View style={styles.aiHintBox}>
             <Text style={styles.aiHintIcon}>🤖</Text>
             <Text style={styles.aiHintText}>
-              Alasan akan diklasifikasikan otomatis oleh AI sebagai informasi pendukung bagi asisten. Jika
-              layanan AI tidak tersedia, pengajuan tetap tersimpan dan diproses.
+              Model EDOM menganalisis sentimen alasan di perangkat (positif, netral, atau negatif). Hasil
+              ini bersifat eksperimental, bukan kategori atau keputusan izin; asisten tetap meninjau
+              pengajuan. Teks alasan tidak dikirim ke API AI.
             </Text>
           </View>
 
@@ -173,8 +174,9 @@ export function PermissionRequestSheet({
             />
           </View>
         </View>
+        </ModalMotion>
       </KeyboardAvoidingView>
-    </Modal>
+    </AnimatedModal>
   );
 }
 

@@ -1,8 +1,9 @@
 import { useState } from 'react';
-import { Modal, Pressable, StyleSheet, Switch, Text, View } from 'react-native';
+import { Pressable, StyleSheet, Switch, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { AppButton } from '@/components/AppButton';
+import { AnimatedModal, ModalMotion } from '@/components/ModalMotion';
 import { AppColors, Radius } from '@/constants/app-theme';
 import { Spacing } from '@/constants/theme';
 import type { PracticeSession } from '@/types';
@@ -53,10 +54,9 @@ export function AttendanceConfirmSheet({
   };
 
   return (
-    <Modal
+    <AnimatedModal
       visible={visible}
-      transparent
-      animationType="slide"
+      variant="sheet"
       onShow={resetForm}
       onRequestClose={onCancel}>
       <View style={styles.root}>
@@ -65,7 +65,8 @@ export function AttendanceConfirmSheet({
           onPress={submitting ? undefined : onCancel}
           accessibilityLabel="Tutup konfirmasi"
         />
-        <View style={[styles.sheet, { paddingBottom: insets.bottom + Spacing.four }]}>
+        <ModalMotion variant="sheet" style={[styles.sheet, { paddingBottom: insets.bottom + Spacing.four }]}>
+        <View>
           <View style={styles.handle} />
           <Text style={styles.title}>Konfirmasi Presensi</Text>
           <Text style={styles.subtitle}>Pastikan data berikut sudah benar sebelum mencatat kehadiran.</Text>
@@ -121,8 +122,9 @@ export function AttendanceConfirmSheet({
             />
           </View>
         </View>
+        </ModalMotion>
       </View>
-    </Modal>
+    </AnimatedModal>
   );
 }
 

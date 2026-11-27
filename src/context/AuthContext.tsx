@@ -5,6 +5,7 @@ import {
   useContext,
   useEffect,
   useMemo,
+  useRef,
   useState,
   type PropsWithChildren,
 } from 'react';
@@ -57,6 +58,7 @@ export function AuthProvider({ children }: PropsWithChildren) {
   const [authReady, setAuthReady] = useState(!isFirebaseConfigured);
   const [retryKey, setRetryKey] = useState(0);
   const [profileSnapshot, setProfileSnapshot] = useState<ProfileSnapshot | null>(null);
+  const profileRetryRef = useRef<{ uid: string | null; retried: boolean }>({ uid: null, retried: false });
 
   const expectedKey = authUser ? `${authUser.uid}:${retryKey}` : null;
 
@@ -65,6 +67,7 @@ export function AuthProvider({ children }: PropsWithChildren) {
     if (!isFirebaseConfigured) return undefined;
 
     const unsubscribe = subscribeAuthState((user) => {
+      if (!user) profileRetryRef.current = { uid: null, retried: false };
       setAuthUser(user);
       setAuthReady(true);
     });
@@ -74,6 +77,11 @@ export function AuthProvider({ children }: PropsWithChildren) {
   // 2. Pantau dokumen profil `users/{uid}` secara real-time saat user sudah login.
   useEffect(() => {
     if (!isFirebaseConfigured || !authUser || !expectedKey) return undefined;
+
+    if (profileRetryRef.current.uid !== authUser.uid) {
+      profileRetryRef.current = { uid: authUser.uid, retried: false };
+    }
+    let retryTimer: ReturnType<typeof setTimeout> | undefined;
 
     const unsubscribe = subscribeUserProfile(
       authUser.uid,
@@ -90,10 +98,19 @@ export function AuthProvider({ children }: PropsWithChildren) {
           profile: null,
           errorMessage: getErrorMessage(error, 'Gagal memuat profil pengguna dari server.'),
         });
+        // Retry once if the profile listener fails while the Auth account/profile
+        // is settling immediately after registration or login.
+        if (!profileRetryRef.current.retried) {
+          profileRetryRef.current.retried = true;
+          retryTimer = setTimeout(() => setRetryKey((current) => current + 1), 800);
+        }
       },
     );
 
-    return unsubscribe;
+    return () => {
+      if (retryTimer) clearTimeout(retryTimer);
+      unsubscribe();
+    };
   }, [authUser, expectedKey]);
 
   const retryProfile = useCallback(() => {

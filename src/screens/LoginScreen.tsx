@@ -105,7 +105,7 @@ export default function LoginScreen() {
             <Text style={styles.configIcon}>⚠️</Text>
             <Text style={styles.cardTitle}>Gagal Memuat Profil</Text>
             <Text style={styles.cardSubtitle}>
-              {errorMessage ?? 'Tidak dapat memuat profil pengguna dari Firestore.'}
+              {errorMessage ?? 'Profil akun tidak dapat dimuat. Periksa koneksi lalu coba lagi.'}
             </Text>
             <AppButton title="Coba Lagi" onPress={retryProfile} />
             <AppButton title="Keluar Akun" variant="ghost" onPress={() => void logout()} />
@@ -175,9 +175,11 @@ export default function LoginScreen() {
               <TextInput
                 value={profileNim}
                 editable={!submitting}
-                onChangeText={setProfileNim}
+                onChangeText={(text) => setProfileNim(text.replace(/\D/g, ''))}
                 placeholder="Contoh: 2211102001"
                 placeholderTextColor={AppColors.textMuted}
+                keyboardType="number-pad"
+                autoCapitalize="none"
                 style={[styles.input, fieldErrors.identifier && styles.inputError]}
               />
               {fieldErrors.identifier ? (

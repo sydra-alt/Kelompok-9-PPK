@@ -4,7 +4,6 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Linking,
-  Modal,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -15,6 +14,7 @@ import { WebView, type WebViewMessageEvent } from 'react-native-webview';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { AppButton } from '@/components/AppButton';
+import { AnimatedModal, ModalMotion } from '@/components/ModalMotion';
 import { EmptyState } from '@/components/EmptyState';
 import { AppColors, CardShadow, Radius } from '@/constants/app-theme';
 import { Spacing } from '@/constants/theme';
@@ -193,7 +193,7 @@ export default function StudentLabsMapScreen() {
       },
       (error) => {
         setLabsLoading(false);
-        setLabsError(getErrorMessage(error, 'Gagal memuat laboratorium dari Firestore.'));
+        setLabsError(getErrorMessage(error, 'Daftar laboratorium tidak dapat dimuat. Coba lagi.'));
       },
     );
   }, [labsRetryKey]);
@@ -378,11 +378,9 @@ export default function StudentLabsMapScreen() {
         </View>
       ) : null}
 
-      <Modal
+      <AnimatedModal
         visible={Boolean(selectedLab)}
-        transparent
-        animationType="slide"
-        statusBarTranslucent
+        variant="sheet"
         onRequestClose={() => setSelectedLabId(null)}>
         <View style={styles.sheetRoot}>
           <Pressable
@@ -392,7 +390,8 @@ export default function StudentLabsMapScreen() {
             onPress={() => setSelectedLabId(null)}
           />
           {selectedLab ? (
-            <View style={[styles.sheet, { paddingBottom: Math.max(insets.bottom, Spacing.four) }]}>
+            <ModalMotion variant="sheet" style={[styles.sheet, { paddingBottom: Math.max(insets.bottom, Spacing.four) }]}>
+            <View>
               <View style={styles.sheetHandle} />
               <View style={styles.sheetHeader}>
                 <View style={styles.sheetTitleBlock}>
@@ -447,9 +446,10 @@ export default function StudentLabsMapScreen() {
                 )}
               </ScrollView>
             </View>
+            </ModalMotion>
           ) : null}
         </View>
-      </Modal>
+      </AnimatedModal>
     </View>
   );
 }

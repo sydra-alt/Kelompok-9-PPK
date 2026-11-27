@@ -1,6 +1,9 @@
 import { Pressable, StyleSheet, Text, type StyleProp, type ViewStyle } from 'react-native';
+import Animated, { useAnimatedStyle, useSharedValue, withSpring } from 'react-native-reanimated';
 
 import { AppColors, Radius } from '@/constants/app-theme';
+
+const AnimatedPressable = Animated.createAnimatedComponent(Pressable);
 
 type Variant = 'primary' | 'secondary' | 'ghost';
 
@@ -22,22 +25,34 @@ export function AppButton({
   style,
   testID,
 }: AppButtonProps) {
+  const scale = useSharedValue(1);
+  const pressStyle = useAnimatedStyle(() => ({
+    transform: [{ scale: scale.value }],
+    opacity: scale.value < 1 ? 0.86 : 1,
+  }));
+
   return (
-    <Pressable
+    <AnimatedPressable
       testID={testID}
       onPress={onPress}
+      onPressIn={() => {
+        if (!disabled) scale.set(withSpring(0.97, { damping: 16, stiffness: 300 }));
+      }}
+      onPressOut={() => {
+        scale.set(withSpring(1, { damping: 14, stiffness: 260 }));
+      }}
       disabled={disabled}
       accessibilityRole="button"
       accessibilityState={{ disabled }}
-      style={({ pressed }) => [
+      style={[
         styles.base,
         variantStyles[variant],
         disabled && styles.disabled,
-        pressed && !disabled && styles.pressed,
+        pressStyle,
         style,
       ]}>
       <Text style={[styles.text, textStyles[variant], disabled && styles.disabledText]}>{title}</Text>
-    </Pressable>
+    </AnimatedPressable>
   );
 }
 
@@ -48,10 +63,6 @@ const styles = StyleSheet.create({
     borderRadius: Radius.md,
     alignItems: 'center',
     justifyContent: 'center',
-  },
-  pressed: {
-    opacity: 0.85,
-    transform: [{ scale: 0.98 }],
   },
   disabled: {
     backgroundColor: AppColors.neutralSoft,

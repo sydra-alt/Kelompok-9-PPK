@@ -123,12 +123,13 @@ export default function RegisterScreen() {
               value={identifier}
               editable={!submitting}
               onChangeText={(text) => {
-                setIdentifier(text);
+                setIdentifier(text.replace(/\D/g, ''));
                 clearFieldError('identifier');
               }}
               placeholder="Contoh: 2211102001"
               placeholderTextColor={AppColors.textMuted}
-              autoCapitalize="characters"
+              keyboardType="number-pad"
+              autoCapitalize="none"
               style={[styles.input, fieldErrors.identifier && styles.inputError]}
             />
             {fieldErrors.identifier ? (

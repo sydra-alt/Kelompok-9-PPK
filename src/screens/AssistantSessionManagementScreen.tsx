@@ -21,6 +21,7 @@ import { getErrorMessage } from '@/services/errors';
 import { buildNotificationFeedback } from '@/services/notification-dispatch-service';
 import type { PracticeSession, SessionStatus } from '@/types';
 import { formatClock, formatDate, formatTimeRange } from '@/utils/format';
+import { isWithinSessionWindow } from '@/utils/session-time';
 
 type PendingAction = 'open' | 'close';
 
@@ -81,6 +82,12 @@ export default function AssistantSessionManagementScreen() {
   const [editModalVisible, setEditModalVisible] = useState(false);
   const [deleteModalVisible, setDeleteModalVisible] = useState(false);
   const [deleting, setDeleting] = useState(false);
+  const [clockNow, setClockNow] = useState(() => new Date());
+
+  useEffect(() => {
+    const timer = setInterval(() => setClockNow(new Date()), 15000);
+    return () => clearInterval(timer);
+  }, []);
 
   // Rekap kehadiran untuk sesi ini dari Firestore real-time
   const records = attendance.filter((record) => record.sessionId === sessionId);
@@ -102,7 +109,8 @@ export default function AssistantSessionManagementScreen() {
   }
 
   const action = session.status === 'open' ? 'close' : 'open';
-  const canChangeStatus = session.status !== 'closed';
+  const isInsideScheduledWindow = isWithinSessionWindow(session, clockNow);
+  const canChangeStatus = session.status === 'open' || (session.status === 'scheduled' && isInsideScheduledWindow);
 
   async function confirmAction() {
     if (!session || !pendingAction) return;
@@ -220,7 +228,7 @@ export default function AssistantSessionManagementScreen() {
           <View style={styles.attendanceHeader}>
             <View>
               <Text style={styles.cardTitle}>Kehadiran Praktikan</Text>
-              <Text style={styles.muted}>Tersinkronisasi langsung dari Firestore</Text>
+              <Text style={styles.muted}>Daftar kehadiran sesi ini</Text>
             </View>
             <View style={styles.countBadge}>
               <Text style={styles.count}>{records.length}</Text>
@@ -294,10 +302,12 @@ export default function AssistantSessionManagementScreen() {
           <Text style={styles.actionTitle}>Status & Kontrol Sesi</Text>
           <Text style={styles.actionDescription}>
             {session.status === 'open'
-              ? 'Sesi saat ini sedang DIBUKA. Praktikan di kelas dapat melakukan presensi mandiri. Tutup sesi setelah praktikum selesai.'
+              ? 'Sesi saat ini sedang DIBUKA. Praktikan di kelas dapat melakukan presensi mandiri. Asisten dapat menutup sesi lebih awal; sesi juga akan ditutup otomatis setelah waktu berakhir selama aplikasi asisten aktif.'
               : session.status === 'closed'
                 ? 'Sesi sudah SELESAI DITUTUP. Presensi untuk sesi ini telah dinonaktifkan secara permanen.'
-                : 'Sesi saat ini BELUM DIBUKA. Buka sesi saat praktikum dimulai agar tombol presensi aktif di aplikasi praktikan.'}
+                : isInsideScheduledWindow
+                  ? 'Waktu praktikum sudah dimulai. Kamu dapat membuka sesi sekarang.'
+                  : 'Sesi hanya dapat dibuka pada tanggal dan jam praktikum yang dijadwalkan.'}
           </Text>
 
           <AppButton
@@ -307,7 +317,9 @@ export default function AssistantSessionManagementScreen() {
                 ? 'Tutup Sesi Praktikum'
                 : session.status === 'closed'
                   ? 'Sesi Sudah Ditutup'
-                  : 'Buka Sesi Praktikum'
+                  : isInsideScheduledWindow
+                    ? 'Buka Sesi Praktikum'
+                    : 'Buka saat jam praktikum'
             }
             onPress={() => setPendingAction(action)}
             disabled={!canChangeStatus}

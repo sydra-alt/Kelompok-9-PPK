@@ -1,5 +1,6 @@
 import type { ReactNode } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
+import Animated, { FadeInDown, useAnimatedStyle, useSharedValue, withSpring } from 'react-native-reanimated';
 
 import { PERMISSION_STATUS_META } from '@/components/PermissionStatusBadge';
 import { StatusBadge } from '@/components/StatusBadge';
@@ -7,6 +8,8 @@ import { AppColors, CardShadow, Radius } from '@/constants/app-theme';
 import { Spacing } from '@/constants/theme';
 import type { PermissionStatus, PracticeSession } from '@/types';
 import { formatDate, formatTimeRange } from '@/utils/format';
+
+const AnimatedPressable = Animated.createAnimatedComponent(Pressable);
 
 interface SessionCardProps {
   session: PracticeSession;
@@ -30,14 +33,23 @@ export function SessionCard({
   testID,
 }: SessionCardProps) {
   const permissionMeta = permissionStatus ? PERMISSION_STATUS_META[permissionStatus] : null;
+  const scale = useSharedValue(1);
+  const pressStyle = useAnimatedStyle(() => ({ transform: [{ scale: scale.value }] }));
   return (
-    <Pressable
+    <AnimatedPressable
       testID={testID}
       onPress={onPress}
+      onPressIn={() => {
+        if (onPress) scale.set(withSpring(0.985, { damping: 16, stiffness: 280 }));
+      }}
+      onPressOut={() => {
+        scale.set(withSpring(1, { damping: 14, stiffness: 240 }));
+      }}
       disabled={!onPress}
       accessibilityRole="button"
       accessibilityLabel={`${session.practicalName} ${session.className}`}
-      style={({ pressed }) => [styles.card, pressed && styles.pressed]}>
+      entering={FadeInDown.springify().damping(18).mass(0.8)}
+      style={[styles.card, pressStyle]}>
       <View style={[styles.accentBar, session.status === 'open' && styles.accentBarOpen]} />
       <View style={styles.body}>
         <View style={styles.headerRow}>
@@ -77,7 +89,7 @@ export function SessionCard({
 
         {footer}
       </View>
-    </Pressable>
+    </AnimatedPressable>
   );
 }
 
@@ -99,10 +111,6 @@ const styles = StyleSheet.create({
     borderColor: AppColors.border,
     overflow: 'hidden',
     ...CardShadow,
-  },
-  pressed: {
-    opacity: 0.85,
-    transform: [{ scale: 0.99 }],
   },
   accentBar: {
     width: 5,

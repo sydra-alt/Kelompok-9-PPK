@@ -1,0 +1,8 @@
+EDOM sentiment model
+
+The supplied model package identifies its training data source as:
+https://github.com/samfch/edom-sentiment
+
+The model is an experimental baseline trained on course evaluation comments,
+not practical-session permission requests. Its predictions must not be used as
+an automatic permission decision.
