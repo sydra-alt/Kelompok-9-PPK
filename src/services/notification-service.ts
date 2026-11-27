@@ -53,8 +53,11 @@ export async function registerPushToken(userId: string): Promise<string> {
   if (Platform.OS === 'web') {
     throw new AppError('notifications-unsupported', 'Push notification tersedia pada aplikasi Android dan iOS.');
   }
-  if (!Device.isDevice) {
-    throw new AppError('notifications-device-required', 'Pendaftaran push notification harus dilakukan di perangkat fisik.');
+  if (Platform.OS === 'android' && !Constants.expoConfig?.android?.googleServicesFile) {
+    throw new AppError(
+      'notifications-google-services-missing',
+      'Konfigurasi Firebase untuk notifikasi belum masuk ke aplikasi. Unduh google-services.json untuk package Android aplikasi, letakkan di root project, lalu buat ulang APK.',
+    );
   }
 
   if (Platform.OS === 'android') {
@@ -87,8 +90,28 @@ export async function registerPushToken(userId: string): Promise<string> {
   let token: string;
   try {
     token = (await getExpoPushTokenAsync({ projectId })).data;
-  } catch {
-    throw new AppError('notifications-token-failed', 'Token push gagal didaftarkan. Periksa koneksi lalu coba lagi.');
+  } catch (error) {
+    const details = error instanceof Error ? error.message : String(error);
+    const normalized = details.toLowerCase();
+    if (normalized.includes('firebaseapp') && normalized.includes('not initialized')) {
+      throw new AppError(
+        'notifications-fcm-not-configured',
+        'Firebase Messaging belum masuk ke build aplikasi. Tambahkan google-services.json yang sesuai dengan package Android, lalu buat ulang aplikasi.',
+      );
+    }
+    if (normalized.includes('403') || normalized.includes('permission_denied') || normalized.includes('firebase installations')) {
+      throw new AppError(
+        'notifications-fcm-rejected',
+        'Firebase menolak registrasi perangkat. Periksa kecocokan package Android, google-services.json, serta pembatasan API key untuk Firebase Installations dan FCM Registration.',
+      );
+    }
+    if (normalized.includes('network') || normalized.includes('timeout') || normalized.includes('fetch')) {
+      throw new AppError('notifications-network-error', 'Token push gagal dibuat karena koneksi ke layanan notifikasi bermasalah. Periksa internet lalu coba lagi.');
+    }
+    throw new AppError(
+      'notifications-token-failed',
+      `Token push gagal dibuat${details ? `: ${details.slice(0, 220)}` : '. Periksa konfigurasi Firebase Messaging dan coba lagi.'}`,
+    );
   }
 
   try {

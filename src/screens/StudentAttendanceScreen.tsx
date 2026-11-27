@@ -1,7 +1,7 @@
 import { router, useLocalSearchParams } from 'expo-router';
 import Constants from 'expo-constants';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Linking, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Linking, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { WebView } from 'react-native-webview';
 
 import { AppButton } from '@/components/AppButton';
@@ -205,10 +205,18 @@ export default function StudentAttendanceScreen() {
   }
 
   return (
-    <>
+    <View style={styles.screen}>
     <ScrollView contentContainerStyle={styles.content}>
       <ConnectionBanner isOffline={isOffline} fromCache={fromCache} error={null} />
       {feedback ? <FeedbackBanner type="error" title="Presensi gagal" message={feedback} onClose={() => setFeedback(null)} /> : null}
+      {labError ? <FeedbackBanner type="error" title="Lokasi lab gagal dimuat" message={labError} /> : null}
+      {locationError ? (
+        <View style={styles.feedbackGroup}>
+          <FeedbackBanner type="error" title="Lokasi perangkat tidak tersedia" message={locationError} onClose={() => setLocationError(null)} />
+          {locationError.includes('Pengaturan') ? <AppButton title="Buka Pengaturan Aplikasi" variant="ghost" onPress={() => void Linking.openSettings()} /> : null}
+        </View>
+      ) : null}
+      {mapError ? <FeedbackBanner type="error" title="Peta presensi gagal dimuat" message={mapError} onClose={() => setMapError(null)} /> : null}
 
       <View style={styles.card}>
         <View style={styles.titleRow}>
@@ -233,7 +241,6 @@ export default function StudentAttendanceScreen() {
             mapRef.current?.injectJavaScript(`window.updateAttendanceMap && window.updateAttendanceMap(${payload}); true;`);
           }} />
         ) : <View style={styles.mapFallback}><Text style={styles.hint}>{lab ? 'Peta belum dapat ditampilkan karena Maps API key belum dikonfigurasi.' : 'Memuat lokasi laboratorium…'}</Text></View>}
-        {mapError ? <Text style={styles.mapError}>{mapError}</Text> : null}
       </View>
 
       <View style={styles.card}>
@@ -245,9 +252,7 @@ export default function StudentAttendanceScreen() {
         {existingAttendance ? (
           <Notice tone="success" message="Presensi untuk sesi ini sudah tercatat." />
         ) : null}
-        {labError ? <Notice tone="danger" message={labError} /> : null}
         {!labError && !lab ? <Text style={styles.hint}>Memuat data laboratorium...</Text> : null}
-        {locationError ? <Notice tone="danger" message={locationError} /> : null}
         {distanceMeters !== null && lab ? (
           <Notice
             tone={insideRadius ? 'success' : 'danger'}
@@ -267,22 +272,23 @@ export default function StudentAttendanceScreen() {
           disabled={checkingLocation || !lab}
           onPress={() => void refreshLocation()}
         />
-        {locationError?.includes('Pengaturan') ? (
-          <AppButton
-            title="Buka Pengaturan Aplikasi"
-            variant="ghost"
-            onPress={() => void Linking.openSettings()}
-          />
-        ) : null}
         <AppButton
           testID="submit-location-attendance"
           title={submitting ? 'Mencatat Presensi...' : 'Presensi Sekarang'}
           disabled={!canSubmit || submitting}
           onPress={() => void handleSubmit()}
         />
-        <AppButton title="Scan QR presensi" variant="ghost" onPress={() => router.push('/student/scan' as any)} />
       </View>
     </ScrollView>
+    <Pressable
+      testID="scan-attendance-qr-fab"
+      accessibilityRole="button"
+      accessibilityLabel="Scan QR presensi"
+      onPress={() => router.push('/student/scan' as any)}
+      style={({ pressed }) => [styles.qrFab, pressed && styles.qrFabPressed]}>
+      <Text style={styles.qrFabIcon}>▦</Text>
+      <Text style={styles.qrFabText}>Scan QR</Text>
+    </Pressable>
     <AnimatedModal
       visible={successModalMessage !== null}
       variant="popup"
@@ -304,7 +310,7 @@ export default function StudentAttendanceScreen() {
         </ModalMotion>
       </View>
     </AnimatedModal>
-    </>
+    </View>
   );
 }
 
@@ -327,12 +333,17 @@ function Notice({ message, tone }: { message: string; tone: 'success' | 'warning
 }
 
 const styles = StyleSheet.create({
+  screen: { flex: 1, backgroundColor: AppColors.background },
+  qrFab: { position: 'absolute', right: Spacing.three, bottom: Spacing.three, minHeight: 54, borderRadius: Radius.pill, paddingHorizontal: Spacing.four, flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: AppColors.primary, ...CardShadow },
+  qrFabPressed: { opacity: 0.82, transform: [{ scale: 0.98 }] },
+  qrFabIcon: { color: AppColors.textOnPrimary, fontSize: 22, fontWeight: '800' },
+  qrFabText: { color: AppColors.textOnPrimary, fontSize: 14, fontWeight: '800' },
   content: {
     width: '100%',
     maxWidth: 720,
     alignSelf: 'center',
     padding: Spacing.three,
-    paddingBottom: Spacing.six,
+    paddingBottom: 104,
     gap: Spacing.three,
   },
   card: {
@@ -352,6 +363,7 @@ const styles = StyleSheet.create({
   sectionTitle: { fontSize: 17, fontWeight: '800', color: AppColors.text },
   mapCard: { backgroundColor: AppColors.surface, borderRadius: Radius.lg, borderWidth: 1, borderColor: AppColors.border, padding: Spacing.three, gap: Spacing.two, ...CardShadow },
   mapHeader: { gap: 3 },
+  feedbackGroup: { gap: Spacing.two },
   attendanceMap: { height: 260, borderRadius: Radius.md, overflow: 'hidden' },
   mapFallback: { height: 180, alignItems: 'center', justifyContent: 'center', padding: Spacing.three, backgroundColor: AppColors.background, borderRadius: Radius.md },
   mapError: { color: AppColors.danger, fontSize: 12, lineHeight: 18 },

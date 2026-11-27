@@ -4,6 +4,7 @@ import { FlatList, Linking, Pressable, StyleSheet, Text, View } from 'react-nati
 
 import { AppButton } from '@/components/AppButton';
 import { ConnectionBanner } from '@/components/ConnectionBanner';
+import { FeedbackBanner } from '@/components/FeedbackBanner';
 import { EmptyState } from '@/components/EmptyState';
 import { LoadingState } from '@/components/LoadingState';
 import { SessionCard } from '@/components/SessionCard';
@@ -50,7 +51,7 @@ export default function StudentHomeScreen() {
   const [filter, setFilter] = useState<Filter>('all');
   const [selectedClassId, setSelectedClassId] = useState<string>('all');
   const [registeringNotifications, setRegisteringNotifications] = useState(false);
-  const [notificationFeedback, setNotificationFeedback] = useState<string | null>(null);
+  const [notificationFeedback, setNotificationFeedback] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
   const [notificationSettingsAvailable, setNotificationSettingsAvailable] = useState(false);
 
   useEffect(() => {
@@ -66,10 +67,10 @@ export default function StudentHomeScreen() {
     setNotificationSettingsAvailable(false);
     try {
       await registerPushToken(profile.uid);
-      setNotificationFeedback('Notifikasi praktikum aktif di perangkat ini.');
+      setNotificationFeedback({ type: 'success', message: 'Notifikasi praktikum aktif di perangkat ini.' });
     } catch (error) {
       const message = getErrorMessage(error, 'Notifikasi gagal diaktifkan. Coba lagi.');
-      setNotificationFeedback(message);
+      setNotificationFeedback({ type: 'error', message });
       setNotificationSettingsAvailable(message.includes('Pengaturan'));
     } finally {
       setRegisteringNotifications(false);
@@ -151,6 +152,14 @@ export default function StudentHomeScreen() {
               error={error}
               onRetry={retry}
             />
+            {notificationFeedback ? (
+              <FeedbackBanner
+                type={notificationFeedback.type}
+                title={notificationFeedback.type === 'success' ? 'Notifikasi aktif' : 'Notifikasi gagal diaktifkan'}
+                message={notificationFeedback.message}
+                onClose={() => setNotificationFeedback(null)}
+              />
+            ) : null}
 
             <View style={styles.profileCard}>
               <View style={styles.profileRow}>
@@ -258,16 +267,13 @@ export default function StudentHomeScreen() {
               testID="open-labs-map-button"
               title="🗺️ Peta Laboratorium"
               variant="secondary"
-              onPress={navigateTo.studentLabsMap}
+              onPress={navigateTo.labsMap}
             />
             <View style={styles.notificationsCard}>
               <Text style={styles.notificationsTitle}>Pemberitahuan Praktikum</Text>
               <Text style={styles.notificationsHint}>
                 Aktifkan notifikasi untuk mendapat kabar pembukaan sesi, perubahan jadwal, dan keputusan izin.
               </Text>
-              {notificationFeedback ? (
-                <Text style={styles.notificationsFeedback}>{notificationFeedback}</Text>
-              ) : null}
               <AppButton
                 testID="enable-notifications-button"
                 title={registeringNotifications ? 'Mengaktifkan...' : 'Aktifkan Notifikasi'}
@@ -349,15 +355,6 @@ export default function StudentHomeScreen() {
           )
         }
       />
-      <Pressable
-        testID="scan-attendance-qr-fab"
-        accessibilityRole="button"
-        accessibilityLabel="Scan QR presensi"
-        onPress={navigateTo.studentQrScanner}
-        style={({ pressed }) => [styles.qrFab, pressed && styles.qrFabPressed]}>
-        <Text style={styles.qrFabIcon}>▦</Text>
-        <Text style={styles.qrFabText}>Scan QR</Text>
-      </Pressable>
     </View>
   );
 }
@@ -373,15 +370,6 @@ function Stat({ label, value }: { label: string; value: number }) {
 
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: AppColors.background },
-  qrFab: {
-    position: 'absolute', right: Spacing.three, bottom: Spacing.three,
-    minHeight: 54, borderRadius: Radius.pill, paddingHorizontal: Spacing.four,
-    flexDirection: 'row', alignItems: 'center', gap: 8,
-    backgroundColor: AppColors.primary, ...CardShadow,
-  },
-  qrFabPressed: { opacity: 0.82, transform: [{ scale: 0.98 }] },
-  qrFabIcon: { color: AppColors.textOnPrimary, fontSize: 22, fontWeight: '800' },
-  qrFabText: { color: AppColors.textOnPrimary, fontSize: 14, fontWeight: '800' },
   listContent: {
     width: '100%',
     maxWidth: 720,

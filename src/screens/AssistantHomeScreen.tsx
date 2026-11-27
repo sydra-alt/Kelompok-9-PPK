@@ -1,4 +1,4 @@
-import { router, useLocalSearchParams } from 'expo-router';
+import { useLocalSearchParams } from 'expo-router';
 import { useEffect, useMemo, useState } from 'react';
 import {
   FlatList,
@@ -109,7 +109,7 @@ export default function AssistantHomeScreen() {
   const [permissionFilter, setPermissionFilter] = useState<PermissionFilter>('all');
   const [feedback, setFeedback] = useState<Feedback | null>(null);
   const [registeringNotifications, setRegisteringNotifications] = useState(false);
-  const [notificationFeedback, setNotificationFeedback] = useState<string | null>(null);
+  const [notificationFeedback, setNotificationFeedback] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
   const [notificationSettingsAvailable, setNotificationSettingsAvailable] = useState(false);
 
   useEffect(() => {
@@ -125,14 +125,18 @@ export default function AssistantHomeScreen() {
     setNotificationSettingsAvailable(false);
     try {
       await registerPushToken(profile.uid);
-      setNotificationFeedback('Token notifikasi asisten berhasil didaftarkan pada perangkat ini.');
+      setNotificationFeedback({ type: 'success', message: 'Token notifikasi asisten berhasil didaftarkan pada perangkat ini.' });
     } catch (error) {
       const message = getErrorMessage(error, 'Pendaftaran notifikasi gagal. Coba lagi.');
-      setNotificationFeedback(message);
+      setNotificationFeedback({ type: 'error', message });
       setNotificationSettingsAvailable(message.includes('Pengaturan'));
     } finally {
       setRegisteringNotifications(false);
     }
+  };
+
+  const reportActionError = (title: string, error: unknown, fallback: string) => {
+    setFeedback({ type: 'error', title, message: getErrorMessage(error, fallback) });
   };
 
   // Modals state
@@ -306,13 +310,35 @@ export default function AssistantHomeScreen() {
               error={error}
               onRetry={retry}
             />
+            {feedback ? (
+              <FeedbackBanner
+                type={feedback.type}
+                title={feedback.title}
+                message={feedback.message}
+                onClose={() => setFeedback(null)}
+              />
+            ) : null}
+            {notificationFeedback ? (
+              <FeedbackBanner
+                type={notificationFeedback.type}
+                title={notificationFeedback.type === 'success' ? 'Notifikasi aktif' : 'Notifikasi gagal diaktifkan'}
+                message={notificationFeedback.message}
+                onClose={() => setNotificationFeedback(null)}
+              />
+            ) : null}
+
+            <AppButton
+              testID="open-labs-map-button"
+              title="Peta Laboratorium Interaktif"
+              variant="secondary"
+              onPress={navigateTo.labsMap}
+            />
 
             <View style={styles.notificationCard}>
               <Text style={styles.notificationTitle}>Notifikasi Asisten</Text>
               <Text style={styles.notificationHint}>
                 Daftarkan perangkat ini untuk menerima push notification jika nanti ada pemberitahuan yang ditujukan kepada asisten.
               </Text>
-              {notificationFeedback ? <Text style={styles.notificationFeedback}>{notificationFeedback}</Text> : null}
               <AppButton
                 title={registeringNotifications ? 'Mendaftarkan...' : 'Aktifkan Notifikasi Asisten'}
                 variant="secondary"
@@ -327,15 +353,6 @@ export default function AssistantHomeScreen() {
                 />
               ) : null}
             </View>
-
-            {feedback ? (
-              <FeedbackBanner
-                type={feedback.type}
-                title={feedback.title}
-                message={feedback.message}
-                onClose={() => setFeedback(null)}
-              />
-            ) : null}
 
             {/* Tab Navigation */}
             <View style={styles.tabBar}>
@@ -842,20 +859,17 @@ export default function AssistantHomeScreen() {
           setEditingClass(null);
         }}
         onSubmit={async (data) => {
-          if (editingClass) {
-            await updateClass(editingClass.id, data);
-            setFeedback({
-              type: 'success',
-              title: 'Kelas diperbarui',
-              message: `Kelas "${data.name}" berhasil diperbarui.`,
-            });
-          } else {
-            await createClass(data);
-            setFeedback({
-              type: 'success',
-              title: 'Kelas dibuat',
-              message: `Kelas "${data.name}" berhasil ditambahkan.`,
-            });
+          try {
+            if (editingClass) {
+              await updateClass(editingClass.id, data);
+              setFeedback({ type: 'success', title: 'Kelas diperbarui', message: `Kelas "${data.name}" berhasil diperbarui.` });
+            } else {
+              await createClass(data);
+              setFeedback({ type: 'success', title: 'Kelas dibuat', message: `Kelas "${data.name}" berhasil ditambahkan.` });
+            }
+          } catch (error) {
+            reportActionError('Kelas gagal disimpan', error, 'Periksa koneksi dan izin Firebase lalu coba lagi.');
+            throw error;
           }
         }}
       />
@@ -868,20 +882,17 @@ export default function AssistantHomeScreen() {
           setEditingLab(null);
         }}
         onSubmit={async (data) => {
-          if (editingLab) {
-            await updateLab(editingLab.id, data);
-            setFeedback({
-              type: 'success',
-              title: 'Laboratorium diperbarui',
-              message: `Data "${data.name}" (radius ${Math.round(data.radiusMeters)} m) berhasil diperbarui.`,
-            });
-          } else {
-            await createLab(data);
-            setFeedback({
-              type: 'success',
-              title: 'Laboratorium ditambahkan',
-              message: `"${data.name}" siap dipakai sebagai acuan presensi lokasi & marker peta.`,
-            });
+          try {
+            if (editingLab) {
+              await updateLab(editingLab.id, data);
+              setFeedback({ type: 'success', title: 'Laboratorium diperbarui', message: `Data "${data.name}" berhasil diperbarui.` });
+            } else {
+              await createLab(data);
+              setFeedback({ type: 'success', title: 'Laboratorium ditambahkan', message: `"${data.name}" siap dipakai.` });
+            }
+          } catch (error) {
+            reportActionError('Laboratorium gagal disimpan', error, 'Periksa data laboratorium, koneksi, dan izin Firebase.');
+            throw error;
           }
         }}
       />
@@ -897,33 +908,28 @@ export default function AssistantHomeScreen() {
           setEditingSession(null);
         }}
         onSubmit={async (data) => {
-          if (editingSession) {
-            const notifResult = await updateSession(editingSession.id, {
-              practicalName: data.practicalName,
-              className: data.className,
-              labId: data.labId,
-              labName: data.labName,
-              date: data.date,
-              startTime: data.startTime,
-              endTime: data.endTime,
-              topic: data.topic,
-              room: data.room,
-              assistantName: data.assistantName,
-            });
-            setFeedback(
-              buildNotificationFeedback(
-                'Jadwal sesi diperbarui',
-                `Sesi ${data.practicalName} (${data.className}) berhasil diperbarui.`,
-                notifResult,
-              ),
-            );
-          } else {
-            await createSession(data);
-            setFeedback({
-              type: 'success',
-              title: 'Sesi praktikum dijadwalkan',
-              message: `Sesi ${data.practicalName} (${data.className}) di ${data.labName} berhasil dibuat.`,
-            });
+          try {
+            if (editingSession) {
+              const notifResult = await updateSession(editingSession.id, {
+                practicalName: data.practicalName,
+                className: data.className,
+                labId: data.labId,
+                labName: data.labName,
+                date: data.date,
+                startTime: data.startTime,
+                endTime: data.endTime,
+                topic: data.topic,
+                room: data.room,
+                assistantName: data.assistantName,
+              });
+              setFeedback(buildNotificationFeedback('Jadwal sesi diperbarui', `Sesi ${data.practicalName} (${data.className}) berhasil diperbarui.`, notifResult));
+            } else {
+              await createSession(data);
+              setFeedback({ type: 'success', title: 'Sesi praktikum dijadwalkan', message: `Sesi ${data.practicalName} (${data.className}) di ${data.labName} berhasil dibuat.` });
+            }
+          } catch (error) {
+            reportActionError('Sesi praktikum gagal disimpan', error, 'Periksa jadwal, koneksi, dan izin Firebase.');
+            throw error;
           }
         }}
       />
@@ -937,12 +943,13 @@ export default function AssistantHomeScreen() {
           setTargetMemberClass(null);
         }}
         onSubmit={async (data) => {
-          await addMember(data);
-          setFeedback({
-            type: 'success',
-            title: 'Peserta ditambahkan',
-            message: `${data.studentName} (${data.studentIdentifier}) berhasil ditambahkan ke kelas.`,
-          });
+          try {
+            await addMember(data);
+            setFeedback({ type: 'success', title: 'Peserta ditambahkan', message: `${data.studentName} (${data.studentIdentifier}) berhasil ditambahkan ke kelas.` });
+          } catch (error) {
+            reportActionError('Peserta gagal ditambahkan', error, 'Periksa NIM, koneksi, dan izin Firebase.');
+            throw error;
+          }
         }}
       />
 
@@ -954,14 +961,13 @@ export default function AssistantHomeScreen() {
           setSelectedPermission(null);
         }}
         onDecide={async (requestId, decision, note) => {
-          const notifResult = await decidePermission(requestId, decision, note);
-          setFeedback(
-            buildNotificationFeedback(
-              'Keputusan izin tersimpan',
-              `Pengajuan izin berhasil ${decision === 'approved' ? 'disetujui' : 'ditolak'}.`,
-              notifResult,
-            ),
-          );
+          try {
+            const notifResult = await decidePermission(requestId, decision, note);
+            setFeedback(buildNotificationFeedback('Keputusan izin tersimpan', `Pengajuan izin berhasil ${decision === 'approved' ? 'disetujui' : 'ditolak'}.`, notifResult));
+          } catch (error) {
+            reportActionError('Keputusan izin gagal disimpan', error, 'Periksa koneksi dan izin Firebase lalu coba lagi.');
+            throw error;
+          }
         }}
       />
 
@@ -986,15 +992,6 @@ export default function AssistantHomeScreen() {
           onConfirm={() => void handleConfirmToggleSession()}
         />
       ) : null}
-      <Pressable
-        testID="session-qr-fab"
-        accessibilityRole="button"
-        accessibilityLabel="Tampilkan QR sesi praktikum"
-        onPress={() => router.push('/assistant/qr' as any)}
-        style={({ pressed }) => [styles.qrFab, pressed && styles.qrFabPressed]}>
-        <Text style={styles.qrFabIcon}>▦</Text>
-        <Text style={styles.qrFabText}>QR Presensi</Text>
-      </Pressable>
     </View>
   );
 }
@@ -1017,15 +1014,6 @@ function Stat({
 }
 
 const styles = StyleSheet.create({
-  qrFab: {
-    position: 'absolute', right: Spacing.three, bottom: Spacing.three,
-    minHeight: 54, borderRadius: Radius.pill, paddingHorizontal: Spacing.four,
-    flexDirection: 'row', alignItems: 'center', gap: 8,
-    backgroundColor: AppColors.primary, ...CardShadow,
-  },
-  qrFabPressed: { opacity: 0.82, transform: [{ scale: 0.98 }] },
-  qrFabIcon: { color: AppColors.textOnPrimary, fontSize: 22, fontWeight: '800' },
-  qrFabText: { color: AppColors.textOnPrimary, fontSize: 14, fontWeight: '800' },
   root: {
     flex: 1,
     backgroundColor: AppColors.background,

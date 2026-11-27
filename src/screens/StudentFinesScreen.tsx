@@ -110,6 +110,7 @@ export default function StudentFinesScreen() {
               type={feedback.type}
               title={feedback.type === 'error' ? 'Checkout gagal' : feedback.type === 'success' ? 'Berhasil' : 'Informasi'}
               message={feedback.message}
+              onClose={() => setFeedback(null)}
             />
           ) : null}
           <View style={styles.summaryCard}>

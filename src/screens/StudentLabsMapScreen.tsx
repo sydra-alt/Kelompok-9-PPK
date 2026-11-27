@@ -17,6 +17,7 @@ import { useNetInfo } from '@react-native-community/netinfo';
 import { AppButton } from '@/components/AppButton';
 import { AnimatedModal, ModalMotion } from '@/components/ModalMotion';
 import { EmptyState } from '@/components/EmptyState';
+import { LoadingState } from '@/components/LoadingState';
 import { AppColors, CardShadow, Radius } from '@/constants/app-theme';
 import { Spacing } from '@/constants/theme';
 import { useAuth } from '@/context/AuthContext';
@@ -165,7 +166,7 @@ function createGoogleMapsHtml(apiKey: string) {
 }
 
 export default function StudentLabsMapScreen() {
-  const { profile } = useAuth();
+  const { profile, status: authStatus, errorMessage: authError, retryProfile } = useAuth();
   const netInfo = useNetInfo();
   const insets = useSafeAreaInsets();
   const mapRef = useRef<WebView<object> | null>(null);
@@ -198,7 +199,7 @@ export default function StudentLabsMapScreen() {
       },
       (error) => {
         setLabsLoading(false);
-        setLabsError(getErrorMessage(error, 'Daftar laboratorium tidak dapat dimuat. Coba lagi.'));
+        setLabsError(getMapReadError(error, 'labs'));
       },
     );
   }, [labsRetryKey]);
@@ -209,7 +210,7 @@ export default function StudentLabsMapScreen() {
       setSessionsFromCache(meta.fromCache);
       setSessionsError(null);
     },
-    (error) => setSessionsError(getErrorMessage(error, 'Jadwal seluruh laboratorium tidak dapat dimuat.')),
+    (error) => setSessionsError(getMapReadError(error, 'sessions')),
   ), [sessionsRetryKey]);
 
   useEffect(() => {
@@ -298,14 +299,18 @@ export default function StudentLabsMapScreen() {
     setSessionsRetryKey((key) => key + 1);
   };
 
+  if (authStatus === 'initializing') {
+    return <LoadingState title="Menyiapkan peta laboratorium..." message="Memastikan akun dan izin akses terlebih dahulu." />;
+  }
+
   if (!profile) {
     return (
       <EmptyState
         icon="🗺️"
-        title="Masuk diperlukan"
-        message="Masuk ke aplikasi untuk melihat peta laboratorium."
-        actionLabel="Kembali"
-        onAction={() => router.back()}
+        title={authStatus === 'error' ? 'Profil akun gagal dimuat' : 'Profil akun belum tersedia'}
+        message={authError ?? 'Akun belum memiliki dokumen users/{uid} yang valid di Firestore.'}
+        actionLabel="Coba Lagi"
+        onAction={retryProfile}
       />
     );
   }
@@ -466,6 +471,16 @@ export default function StudentLabsMapScreen() {
       </AnimatedModal>
     </View>
   );
+}
+
+function getMapReadError(error: unknown, collectionName: 'labs' | 'sessions') {
+  const code = typeof error === 'object' && error !== null && 'code' in error
+    ? String((error as { code?: unknown }).code)
+    : '';
+  if (code.includes('permission-denied')) {
+    return `Firebase menolak pembacaan koleksi ${collectionName}. Di Firebase Console, buka Firestore Database > Rules dan terapkan aturan baca untuk pengguna yang sudah login; setelah menyimpan rules, muat ulang peta.`;
+  }
+  return getErrorMessage(error, `Data ${collectionName} tidak dapat dimuat. Periksa koneksi lalu coba lagi.`);
 }
 
 function ActivityRow({

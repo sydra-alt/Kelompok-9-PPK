@@ -4,6 +4,7 @@ import { AppButton } from '@/components/AppButton';
 import { AppColors, CardShadow, Radius } from '@/constants/app-theme';
 import { Spacing } from '@/constants/theme';
 import { useAuth } from '@/context/AuthContext';
+import { navigateTo } from '@/navigation/AppNavigator';
 
 /** Beranda aslab untuk mengakses fitur pengelolaan laboratorium. */
 export default function AslabHomeScreen() {
@@ -28,6 +29,8 @@ export default function AslabHomeScreen() {
           <Text style={styles.value}>{profile?.identifier ?? '—'}</Text>
         </View>
       </View>
+
+      <AppButton title="Peta Laboratorium Interaktif" variant="secondary" onPress={navigateTo.labsMap} />
 
       <AppButton title="Keluar" variant="ghost" onPress={() => void logout()} />
     </ScrollView>

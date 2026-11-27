@@ -1,9 +1,10 @@
 import { router } from 'expo-router';
 import { useMemo, useState } from 'react';
-import { Alert, FlatList, Pressable, StyleSheet, Text, View } from 'react-native';
+import { FlatList, Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { ConnectionBanner } from '@/components/ConnectionBanner';
 import { EmptyState } from '@/components/EmptyState';
+import { FeedbackBanner, type FeedbackType } from '@/components/FeedbackBanner';
 import { LoadingState } from '@/components/LoadingState';
 import { AiSentimentChip, PermissionStatusBadge } from '@/components/PermissionStatusBadge';
 import { AppColors, CardShadow, Radius } from '@/constants/app-theme';
@@ -33,6 +34,7 @@ export default function StudentPermissionsScreen() {
   const { permissionRequests, loading, error, fromCache, isOffline, retry } = useStudentData();
   const [filter, setFilter] = useState<Filter>('all');
   const [retryingAiId, setRetryingAiId] = useState<string | null>(null);
+  const [feedback, setFeedback] = useState<{ type: FeedbackType; title: string; message: string } | null>(null);
 
   const filtered = useMemo(
     () =>
@@ -71,8 +73,9 @@ export default function StudentPermissionsScreen() {
     setRetryingAiId(item.id);
     try {
       await classifyPermissionRequest(item.id, item.reason);
+      setFeedback({ type: 'success', title: 'Analisis selesai', message: 'Hasil sentimen izin berhasil diperbarui.' });
     } catch (err) {
-      Alert.alert('Analisis gagal disimpan', getErrorMessage(err, 'Periksa koneksi lalu coba lagi.'));
+      setFeedback({ type: 'error', title: 'Analisis gagal disimpan', message: getErrorMessage(err, 'Periksa koneksi lalu coba lagi.') });
     } finally {
       setRetryingAiId(null);
     }
@@ -92,6 +95,7 @@ export default function StudentPermissionsScreen() {
             error={error}
             onRetry={retry}
           />
+          {feedback ? <FeedbackBanner type={feedback.type} title={feedback.title} message={feedback.message} onClose={() => setFeedback(null)} /> : null}
 
           <View style={styles.summaryCard}>
             <Text style={styles.summaryTitle}>Status Pengajuan Izin</Text>

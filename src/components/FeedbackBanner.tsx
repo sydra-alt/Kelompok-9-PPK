@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { AppColors, Radius } from '@/constants/app-theme';
@@ -24,13 +24,15 @@ interface FeedbackBannerProps {
 export function FeedbackBanner({ type, title, message, onClose, testID }: FeedbackBannerProps) {
   const meta = META[type];
   const [dismissedMessage, setDismissedMessage] = useState<string | null>(null);
+  const onCloseRef = useRef(onClose);
+  useEffect(() => { onCloseRef.current = onClose; }, [onClose]);
   useEffect(() => {
     const timer = setTimeout(() => {
-      if (onClose) onClose();
+      if (onCloseRef.current) onCloseRef.current();
       else setDismissedMessage(message);
     }, 5000);
     return () => clearTimeout(timer);
-  }, [message, onClose]);
+  }, [type, title, message]);
   if (dismissedMessage === message) return null;
   return (
     <View

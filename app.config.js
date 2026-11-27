@@ -18,6 +18,7 @@ loadLocalEnvironment();
 
 module.exports = ({ config }) => {
   const mapsApiKey = process.env.GOOGLE_MAPS_API_KEY;
+  const googleServicesFile = path.join(__dirname, 'google-services.json');
   if (!mapsApiKey) {
     throw new Error(
       'GOOGLE_MAPS_API_KEY belum diatur. Tambahkan ke .env.local atau environment build sebelum menjalankan Expo.',
@@ -26,6 +27,10 @@ module.exports = ({ config }) => {
 
   return {
     ...config,
+    android: {
+      ...(config.android ?? {}),
+      ...(fs.existsSync(googleServicesFile) ? { googleServicesFile: './google-services.json' } : {}),
+    },
     // The Demo Key is used by the Maps JavaScript API inside WebView, not by
     // the native Google Maps SDK configured through react-native-maps.
     extra: {

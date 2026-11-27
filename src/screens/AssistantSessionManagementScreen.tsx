@@ -334,6 +334,16 @@ export default function AssistantSessionManagementScreen() {
         </View>
       </ScrollView>
 
+      <Pressable
+        testID="session-qr-fab"
+        accessibilityRole="button"
+        accessibilityLabel="Tampilkan QR presensi sesi ini"
+        onPress={() => navigateTo.assistantQr(session.id)}
+        style={({ pressed }) => [styles.qrFab, pressed && styles.qrFabPressed]}>
+        <Text style={styles.qrFabIcon}>▦</Text>
+        <Text style={styles.qrFabText}>QR Presensi</Text>
+      </Pressable>
+
       {/* MODALS */}
       <ConfirmActionModal
         visible={pendingAction !== null}
@@ -351,25 +361,24 @@ export default function AssistantSessionManagementScreen() {
         defaultAssistantName={assistantName}
         onClose={() => setEditModalVisible(false)}
         onSubmit={async (data) => {
-          const notifResult = await updateSession(session.id, {
-            date: data.date,
-            startTime: data.startTime,
-            endTime: data.endTime,
-            labId: data.labId,
-            labName: data.labName,
-            topic: data.topic,
-            room: data.room,
-            assistantName: data.assistantName,
-            practicalName: data.practicalName,
-            className: data.className,
-          });
-          setFeedback(
-            buildNotificationFeedback(
-              'Informasi sesi diperbarui',
-              'Perubahan jadwal dan lokasi sesi berhasil disimpan.',
-              notifResult,
-            ),
-          );
+          try {
+            const notifResult = await updateSession(session.id, {
+              date: data.date,
+              startTime: data.startTime,
+              endTime: data.endTime,
+              labId: data.labId,
+              labName: data.labName,
+              topic: data.topic,
+              room: data.room,
+              assistantName: data.assistantName,
+              practicalName: data.practicalName,
+              className: data.className,
+            });
+            setFeedback(buildNotificationFeedback('Informasi sesi diperbarui', 'Perubahan jadwal dan lokasi sesi berhasil disimpan.', notifResult));
+          } catch (error) {
+            setFeedback({ type: 'error', title: 'Perubahan sesi gagal disimpan', message: getErrorMessage(error, 'Periksa koneksi dan izin Firebase lalu coba lagi.') });
+            throw error;
+          }
         }}
       />
 
@@ -403,12 +412,21 @@ function InfoRow({
 }
 
 const styles = StyleSheet.create({
+  qrFab: {
+    position: 'absolute', right: Spacing.three, bottom: Spacing.three,
+    minHeight: 54, borderRadius: Radius.pill, paddingHorizontal: Spacing.four,
+    flexDirection: 'row', alignItems: 'center', gap: 8,
+    backgroundColor: AppColors.primary, ...CardShadow,
+  },
+  qrFabPressed: { opacity: 0.82, transform: [{ scale: 0.98 }] },
+  qrFabIcon: { color: AppColors.textOnPrimary, fontSize: 22, fontWeight: '800' },
+  qrFabText: { color: AppColors.textOnPrimary, fontSize: 14, fontWeight: '800' },
   content: {
     width: '100%',
     maxWidth: 720,
     alignSelf: 'center',
     padding: Spacing.three,
-    paddingBottom: Spacing.six,
+    paddingBottom: 104,
     gap: Spacing.three,
   },
   hero: {
