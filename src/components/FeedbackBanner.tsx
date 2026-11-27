@@ -1,16 +1,8 @@
-import { useEffect, useRef, useState } from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { useCallback, useEffect, useId, useRef } from 'react';
 
-import { AppColors, Radius } from '@/constants/app-theme';
-import { Spacing } from '@/constants/theme';
+import { useFeedbackToast } from '@/components/FeedbackToastProvider';
 
 export type FeedbackType = 'success' | 'error' | 'info';
-
-const META: Record<FeedbackType, { icon: string; color: string; background: string }> = {
-  success: { icon: '✅', color: AppColors.success, background: AppColors.successSoft },
-  error: { icon: '⛔', color: AppColors.danger, background: AppColors.dangerSoft },
-  info: { icon: 'ℹ️', color: AppColors.warning, background: AppColors.warningSoft },
-};
 
 interface FeedbackBannerProps {
   type: FeedbackType;
@@ -20,66 +12,28 @@ interface FeedbackBannerProps {
   testID?: string;
 }
 
-/** Banner umpan balik berhasil / gagal / informasi. */
+/** Registers a status message in the fixed app-level feedback overlay. */
 export function FeedbackBanner({ type, title, message, onClose, testID }: FeedbackBannerProps) {
-  const meta = META[type];
-  const [dismissedMessage, setDismissedMessage] = useState<string | null>(null);
+  const id = useId();
   const onCloseRef = useRef(onClose);
-  useEffect(() => { onCloseRef.current = onClose; }, [onClose]);
-  useEffect(() => {
-    const timer = setTimeout(() => {
-      if (onCloseRef.current) onCloseRef.current();
-      else setDismissedMessage(message);
-    }, 5000);
-    return () => clearTimeout(timer);
-  }, [type, title, message]);
-  if (dismissedMessage === message) return null;
-  return (
-    <View
-      testID={testID}
-      accessibilityRole="alert"
-      style={[styles.banner, { backgroundColor: meta.background, borderColor: meta.color }]}>
-      <Text style={styles.icon}>{meta.icon}</Text>
-      <View style={styles.content}>
-        <Text style={[styles.title, { color: meta.color }]}>{title}</Text>
-        <Text style={styles.message}>{message}</Text>
-      </View>
-      {onClose ? (
-        <Pressable onPress={() => { setDismissedMessage(message); onClose?.(); }} hitSlop={12} accessibilityLabel="Tutup pesan">
-          <Text style={[styles.close, { color: meta.color }]}>✕</Text>
-        </Pressable>
-      ) : null}
-    </View>
-  );
-}
 
-const styles = StyleSheet.create({
-  banner: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    gap: Spacing.two + 4,
-    padding: Spacing.three,
-    borderRadius: Radius.md,
-    borderWidth: 1,
-  },
-  icon: {
-    fontSize: 18,
-  },
-  content: {
-    flex: 1,
-    gap: 2,
-  },
-  title: {
-    fontSize: 14,
-    fontWeight: '700',
-  },
-  message: {
-    fontSize: 13,
-    lineHeight: 19,
-    color: AppColors.text,
-  },
-  close: {
-    fontSize: 16,
-    fontWeight: '700',
-  },
-});
+  const { present, update, dismiss } = useFeedbackToast();
+  const handleClose = useCallback(() => onCloseRef.current?.(), []);
+
+  useEffect(() => {
+    onCloseRef.current = onClose;
+  }, [onClose]);
+
+  useEffect(() => {
+    present(id, { type, title, message, testID, onClose: handleClose });
+    return () => dismiss(id, false);
+    // A status message is registered once; content changes are handled below.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [dismiss, handleClose, id, present]);
+
+  useEffect(() => {
+    update(id, { type, title, message, testID, onClose: handleClose });
+  }, [handleClose, id, message, testID, title, type, update]);
+
+  return null;
+}

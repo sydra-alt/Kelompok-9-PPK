@@ -2,6 +2,7 @@ import { DefaultTheme, ThemeProvider } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
 
 import { AnimatedSplashOverlay } from '@/components/animated-icon';
+import { FeedbackToastProvider } from '@/components/FeedbackToastProvider';
 import { NotificationRuntime } from '@/components/NotificationRuntime';
 import { AppColors } from '@/constants/app-theme';
 import { AssistantDataProvider } from '@/context/AssistantDataContext';
@@ -27,17 +28,19 @@ const AppTheme = {
 export default function RootLayout() {
   return (
     <ThemeProvider value={AppTheme}>
-      <AuthProvider>
-        <StudentDataProvider>
-          <AssistantDataProvider>
-            <AssistantStoreProvider>
-              <AnimatedSplashOverlay />
-              <NotificationRuntime />
-              <AppNavigator />
-            </AssistantStoreProvider>
-          </AssistantDataProvider>
-        </StudentDataProvider>
-      </AuthProvider>
+      <FeedbackToastProvider>
+        <AuthProvider>
+          <StudentDataProvider>
+            <AssistantDataProvider>
+              <AssistantStoreProvider>
+                <AnimatedSplashOverlay />
+                <NotificationRuntime />
+                <AppNavigator />
+              </AssistantStoreProvider>
+            </AssistantDataProvider>
+          </StudentDataProvider>
+        </AuthProvider>
+      </FeedbackToastProvider>
     </ThemeProvider>
   );
 }
