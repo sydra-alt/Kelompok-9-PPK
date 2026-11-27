@@ -6,7 +6,7 @@ Dokumen ini menjelaskan konfigurasi environment, skema data Firestore, dan kontr
 
 ## 1. Variabel Konfigurasi Environment (`.env` & `.env.local`)
 
-Aplikasi membaca konfigurasi Firebase client dan API AI melalui variabel `EXPO_PUBLIC_*` di [`src/services/firebase/config.ts`](../src/services/firebase/config.ts), serta key Google Maps Android melalui [`app.config.js`](../app.config.js).
+Aplikasi membaca konfigurasi Firebase client melalui variabel `EXPO_PUBLIC_*` di [`src/services/firebase/config.ts`](../src/services/firebase/config.ts), serta key Google Maps Android melalui [`app.config.js`](../app.config.js). Analisis sentimen alasan izin memakai model EDOM lokal di folder [`ai/`](../ai/) dan tidak memerlukan endpoint AI.
 
 1. Salin [`.env.example`](../.env.example) menjadi `.env` (dan isi `.env.local` untuk `GOOGLE_MAPS_API_KEY`) di root proyek.
 2. Isi variabel berikut:
@@ -20,9 +20,7 @@ Aplikasi membaca konfigurasi Firebase client dan API AI melalui variabel `EXPO_P
 | `EXPO_PUBLIC_FIREBASE_MESSAGING_SENDER_ID` | Opsional | Nomor pengirim FCM/project number |
 | `EXPO_PUBLIC_FIREBASE_APP_ID` | Ya | App ID Web (`1:...:web:...`) |
 | `GOOGLE_MAPS_API_KEY` | Ya (Android) | Key Google Maps SDK for Android di `.env.local` untuk build/run native |
-| `EXPO_PUBLIC_AI_CLASSIFIER_URL` | Opsional | Endpoint HTTP POST API AI klasifikasi alasan izin dari pengajar |
 | `EXPO_PUBLIC_AI_CLASSIFIER_API_KEY` | Opsional | Bearer token API AI (jika dibutuhkan endpoint pengajar) |
-| `EXPO_PUBLIC_AI_CLASSIFIER_TIMEOUT_MS` | Opsional | Batas waktu request API AI dalam milidetik (default `10000`) |
 | `EXPO_PUBLIC_PUSH_DISPATCH_MODE` | Opsional | `client` (default, via Expo Push API) atau `server` (bila memakai Cloud Functions) |
 | `EXPO_PUBLIC_PUSH_SERVICE_URL` | Opsional | Endpoint pengiriman Expo Push API (default `https://exp.host/--/api/v2/push/send`) |
 
@@ -124,8 +122,8 @@ Pengajuan izin praktikan untuk sesi tertentu. ID dokumen deterministik: `permiss
 - `status`: `'pending' | 'approved' | 'rejected'` (wajib — saat dibuat oleh praktikan selalu `'pending'`)
 - `aiClassification`: `map` (terpisah dari `status` keputusan!)
   - `status`: `'pending' | 'success' | 'failed' | 'skipped'`
-  - `category`: `string | null`
-  - `confidence`: `number | null`
+  - `sentiment`: `string | null` (`positif`, `netral`, atau `negatif`)
+  - `confidence`: `null` untuk model EDOM (skor model bukan probabilitas)
   - `error`: `string | null`
   - `classifiedAt`: `Timestamp | null`
 - `createdAt`: `Timestamp`
@@ -147,8 +145,8 @@ Seluruh kode layar tidak memanggil SDK Firestore secara langsung, melainkan mela
 - [`src/services/attendance-service.ts`](../src/services/attendance-service.ts) — validasi status sesi, cek radius laboratorium (Haversine via [`src/utils/distance.ts`](../src/utils/distance.ts)), dan transaksi presensi anti-duplikat.
 - [`src/services/location-service.ts`](../src/services/location-service.ts) — permintaan izin lokasi foreground, pembacaan koordinat GPS terkini, serta pemantauan posisi untuk Peta Lab.
 - [`src/services/notification-service.ts`](../src/services/notification-service.ts) — pendaftaran & pembersihan Expo Push Token di `users/{uid}.pushTokens`.
-- [`src/services/permission-service.ts`](../src/services/permission-service.ts) — validasi alasan, transaksi pembuatan pengajuan izin (`pending`), dan pembaruan hasil klasifikasi AI.
-- [`src/services/ai-classifier.ts`](../src/services/ai-classifier.ts) — pemanggilan HTTP ke API AI dari pengajar dengan timeout & fallback aman.
+- [`src/services/permission-service.ts`](../src/services/permission-service.ts) — validasi alasan, transaksi pembuatan pengajuan izin (`pending`), dan penyimpanan hasil sentimen lokal.
+- [`src/services/ai-classifier.ts`](../src/services/ai-classifier.ts) — inferensi sentimen lokal dengan model EDOM; teks alasan tidak dikirim ke API AI.
 
 ### Layanan asisten, laboratorium, push dispatch & security rules
 - [`src/services/assistant-data-service.ts`](../src/services/assistant-data-service.ts) — listener real-time dan CRUD kelas, peserta, sesi (beserta relasi `labId`/`labName`), pembukaan/penutupan sesi, rekap presensi, dan keputusan izin.
@@ -172,4 +170,3 @@ Deploy aturan ke Firebase Project dengan Firebase CLI:
 ```bash
 firebase deploy --only firestore:rules
 ```
-

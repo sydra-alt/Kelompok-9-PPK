@@ -38,7 +38,7 @@ const QUICK_TEMPLATES = [
 
 /**
  * Bottom sheet pengajuan izin untuk sesi tertentu.
- * Memvalidasi panjang alasan sebelum mengirim ke Firestore & API AI.
+ * Memvalidasi panjang alasan sebelum menyimpan ke Firestore dan menganalisis sentimen lokal.
  */
 export function PermissionRequestSheet({
   visible,
@@ -151,8 +151,9 @@ export function PermissionRequestSheet({
           <View style={styles.aiHintBox}>
             <Text style={styles.aiHintIcon}>🤖</Text>
             <Text style={styles.aiHintText}>
-              Alasan akan diklasifikasikan otomatis oleh AI sebagai informasi pendukung bagi asisten. Jika
-              layanan AI tidak tersedia, pengajuan tetap tersimpan dan diproses.
+              Model EDOM menganalisis sentimen alasan di perangkat (positif, netral, atau negatif). Hasil
+              ini bersifat eksperimental, bukan kategori atau keputusan izin; asisten tetap meninjau
+              pengajuan. Teks alasan tidak dikirim ke API AI.
             </Text>
           </View>
 

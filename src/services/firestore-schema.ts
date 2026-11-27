@@ -190,7 +190,7 @@ function toAiClassification(value: unknown): AiClassification {
     status: AI_STATUSES.includes(d.status as AiClassificationStatus)
       ? (d.status as AiClassificationStatus)
       : 'pending',
-    category: optStr(d.category) ?? null,
+    sentiment: optStr(d.sentiment) ?? null,
     confidence: typeof d.confidence === 'number' ? d.confidence : null,
     error: optStr(d.error) ?? null,
   };
@@ -218,4 +218,3 @@ export function toPermissionRequest(snap: DocumentSnapshot): PermissionRequest {
     decisionNote: optStr(d.decisionNote) ?? null,
   };
 }
-

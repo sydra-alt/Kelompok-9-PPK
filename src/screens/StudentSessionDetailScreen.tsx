@@ -8,7 +8,7 @@ import { EmptyState } from '@/components/EmptyState';
 import { FeedbackBanner, type FeedbackType } from '@/components/FeedbackBanner';
 import { LoadingState } from '@/components/LoadingState';
 import { PermissionRequestSheet } from '@/components/PermissionRequestSheet';
-import { AiCategoryChip, PermissionStatusBadge } from '@/components/PermissionStatusBadge';
+import { AiSentimentChip, PermissionStatusBadge } from '@/components/PermissionStatusBadge';
 import { StatusBadge } from '@/components/StatusBadge';
 import { AppColors, CardShadow, Radius } from '@/constants/app-theme';
 import { Spacing } from '@/constants/theme';
@@ -30,7 +30,7 @@ interface Feedback {
 
 /**
  * FR-03, FR-05 & Pengajuan Izin (Sprint 2) — Detail sesi praktikum real-time,
- * presensi dengan transaksi anti-duplikat, serta pengajuan izin + klasifikasi AI.
+ * presensi dengan transaksi anti-duplikat, serta pengajuan izin + analisis sentimen lokal.
  */
 export default function StudentSessionDetailScreen() {
   const { sessionId } = useLocalSearchParams<{ sessionId: string }>();
@@ -166,7 +166,7 @@ export default function StudentSessionDetailScreen() {
         type: 'success',
         title: 'Pengajuan izin terkirim',
         message:
-          'Pengajuan izin disimpan dengan status Menunggu Keputusan. Klasifikasi alasan oleh AI sedang diproses sebagai informasi pendukung.',
+          'Pengajuan izin disimpan dengan status Menunggu Keputusan. Analisis sentimen lokal sedang diproses sebagai informasi pendukung.',
       });
     } catch (err) {
       setPermissionSheetVisible(false);
@@ -323,7 +323,7 @@ export default function StudentSessionDetailScreen() {
               </View>
 
               <View style={styles.aiSection}>
-                <AiCategoryChip classification={myPermission.aiClassification} />
+                <AiSentimentChip classification={myPermission.aiClassification} />
                 {myPermission.aiClassification.status === 'failed' ? (
                   <Pressable
                     testID="retry-ai-button"
@@ -331,7 +331,7 @@ export default function StudentSessionDetailScreen() {
                     onPress={() => void handleRetryAi()}
                     style={styles.retryAiButton}>
                     <Text style={styles.retryAiText}>
-                      {retryingAi ? 'Memproses...' : 'Coba Klasifikasi Ulang'}
+                      {retryingAi ? 'Memproses...' : 'Coba Analisis Ulang'}
                     </Text>
                   </Pressable>
                 ) : null}

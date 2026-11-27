@@ -5,7 +5,7 @@ import { FlatList, Pressable, StyleSheet, Text, View } from 'react-native';
 import { ConnectionBanner } from '@/components/ConnectionBanner';
 import { EmptyState } from '@/components/EmptyState';
 import { LoadingState } from '@/components/LoadingState';
-import { AiCategoryChip, PermissionStatusBadge } from '@/components/PermissionStatusBadge';
+import { AiSentimentChip, PermissionStatusBadge } from '@/components/PermissionStatusBadge';
 import { AppColors, CardShadow, Radius } from '@/constants/app-theme';
 import { Spacing } from '@/constants/theme';
 import { useAuth } from '@/context/AuthContext';
@@ -196,7 +196,7 @@ function PermissionRequestCard({
       </View>
 
       <View style={styles.aiRow}>
-        <AiCategoryChip classification={item.aiClassification} />
+        <AiSentimentChip classification={item.aiClassification} />
         {item.aiClassification.status === 'failed' ? (
           <Pressable
             testID={`retry-ai-${item.id}`}
@@ -204,7 +204,7 @@ function PermissionRequestCard({
             onPress={onRetryAi}
             style={styles.retryAiButton}>
             <Text style={styles.retryAiText}>
-              {retryingAi ? 'Memproses...' : 'Coba Klasifikasi Ulang'}
+              {retryingAi ? 'Memproses...' : 'Coba Analisis Ulang'}
             </Text>
           </Pressable>
         ) : null}
@@ -406,4 +406,3 @@ const styles = StyleSheet.create({
     color: AppColors.textMuted,
   },
 });
-

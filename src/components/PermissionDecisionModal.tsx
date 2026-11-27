@@ -10,7 +10,7 @@ import {
   View,
 } from 'react-native';
 
-import { AiCategoryChip, PermissionStatusBadge } from '@/components/PermissionStatusBadge';
+import { AiSentimentChip, PermissionStatusBadge } from '@/components/PermissionStatusBadge';
 import { AnimatedModal, ModalMotion } from '@/components/ModalMotion';
 import { AppColors, Radius } from '@/constants/app-theme';
 import { Spacing } from '@/constants/theme';
@@ -123,11 +123,11 @@ function PermissionDecisionContent({
           </View>
 
           <View style={styles.aiCard}>
-            <Text style={styles.aiTitle}>Analisis AI Classifier:</Text>
-            <AiCategoryChip classification={request.aiClassification} />
+            <Text style={styles.aiTitle}>Analisis Sentimen Lokal:</Text>
+            <AiSentimentChip classification={request.aiClassification} />
             <Text style={styles.aiDisclaimer}>
-              ⚠️ Keputusan akhir mutlak berada di tangan asisten. Hasil klasifikasi AI hanya
-              berfungsi sebagai referensi pendukung dan tidak menentukan status izin secara otomatis.
+              ⚠️ Keputusan akhir mutlak berada di tangan asisten. Analisis sentimen EDOM bersifat
+              eksperimental dan hanya menjadi informasi pendukung; hasilnya tidak menentukan persetujuan.
             </Text>
           </View>
 

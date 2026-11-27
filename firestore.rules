@@ -249,7 +249,7 @@ service cloud.firestore {
 
       // Pembaruan izin:
       // - Asisten: menetapkan keputusan ('approved' / 'rejected'), mengisi decidedBy, decidedAt
-      // - Praktikan: HANYA memperbarui field aiClassification saat hasil klasifikasi AI diterima
+      // - Praktikan: HANYA memperbarui field aiClassification saat hasil sentimen lokal tersedia
       allow update: if (
         isAssistant()
         && request.resource.data.status in ['approved', 'rejected']

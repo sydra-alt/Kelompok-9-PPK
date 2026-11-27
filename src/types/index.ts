@@ -143,9 +143,9 @@ export type AiClassificationStatus = 'pending' | 'success' | 'failed' | 'skipped
 
 export interface AiClassification {
   status: AiClassificationStatus;
-  /** Kategori hasil API AI (mis. "sakit", "keluarga"); null jika belum/gagal. */
-  category: string | null;
-  /** Skor keyakinan 0..1 bila disediakan API. */
+  /** Sentimen hasil model EDOM; bukan kategori alasan izin atau keputusan. */
+  sentiment: string | null;
+  /** Tidak disediakan sebagai probabilitas oleh model EDOM. */
   confidence: number | null;
   /** Pesan galat singkat bila klasifikasi gagal. */
   error: string | null;
