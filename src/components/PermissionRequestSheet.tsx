@@ -37,7 +37,7 @@ const QUICK_TEMPLATES = [
 ];
 
 /**
- * Bottom sheet pengajuan izin untuk sesi tertentu (PIC: Programmer 1).
+ * Bottom sheet pengajuan izin untuk sesi tertentu.
  * Memvalidasi panjang alasan sebelum mengirim ke Firestore & API AI.
  */
 export function PermissionRequestSheet({

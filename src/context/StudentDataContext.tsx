@@ -28,7 +28,7 @@ import type {
 } from '@/types';
 
 /**
- * Provider data real-time khusus praktikan (PIC: Programmer 1).
+ * Provider data real-time khusus praktikan.
  *
  * Hanya berlangganan koleksi milik praktikan yang sedang login:
  * - `classMembers` (keanggotaan kelas praktikan)

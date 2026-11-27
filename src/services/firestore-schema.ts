@@ -4,6 +4,7 @@ import type {
   AiClassification,
   AiClassificationStatus,
   AttendanceRecord,
+  AttendanceStatus,
   ClassMembership,
   Lab,
   PermissionRequest,
@@ -18,7 +19,7 @@ import { nowLocalDateTime } from '@/utils/format';
 
 /**
  * Kontrak nama koleksi & pembentuk ID dokumen Firestore.
- * Dipakai bersama alur praktikan (Programmer 1) dan asisten (Programmer 2).
+ * Dipakai bersama oleh layanan data praktikan dan asisten.
  * Detail field: `docs/Firestore Schema.md`.
  */
 export const COLLECTIONS = {
@@ -48,7 +49,7 @@ export const permissionRequestId = (sessionId: string, studentId: string) => `${
 const SESSION_STATUSES: SessionStatus[] = ['scheduled', 'open', 'closed'];
 const PERMISSION_STATUSES: PermissionStatus[] = ['pending', 'approved', 'rejected'];
 const AI_STATUSES: AiClassificationStatus[] = ['pending', 'success', 'failed', 'skipped'];
-const ROLES: UserRole[] = ['praktikan', 'asisten'];
+const ROLES: UserRole[] = ['praktikan', 'asisten', 'aslab'];
 
 const str = (value: unknown, fallback = ''): string => (typeof value === 'string' ? value : fallback);
 const optStr = (value: unknown): string | undefined =>
@@ -164,6 +165,9 @@ export function toPracticeSession(snap: DocumentSnapshot): PracticeSession {
 
 export function toAttendanceRecord(snap: DocumentSnapshot): AttendanceRecord {
   const d = readData(snap);
+  const attendanceStatus = ['on_time', 'late', 'excused_absence'].includes(d.attendanceStatus)
+    ? (d.attendanceStatus as AttendanceStatus)
+    : undefined;
   return {
     id: snap.id,
     sessionId: str(d.sessionId),
@@ -171,7 +175,9 @@ export function toAttendanceRecord(snap: DocumentSnapshot): AttendanceRecord {
     studentId: str(d.studentId),
     studentName: str(d.studentName),
     studentIdentifier: optStr(d.studentIdentifier),
-    attendanceTime: timestampToLocal(d.attendedAt) ?? nowLocalDateTime(),
+    attendanceTime: timestampToLocal(d.attendedAt),
+    attendanceStatus,
+    lateMinutes: finiteNumber(d.lateMinutes),
     latitude: finiteNumber(d.latitude),
     longitude: finiteNumber(d.longitude),
     distanceMeters: finiteNumber(d.distanceMeters),

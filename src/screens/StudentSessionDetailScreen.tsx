@@ -256,11 +256,18 @@ export default function StudentSessionDetailScreen() {
               <Text style={styles.statusIcon}>✅</Text>
               <View style={styles.statusTextBlock}>
                 <Text style={[styles.statusTitle, { color: AppColors.success }]}>
-                  Kamu sudah hadir
+                  {myRecord.attendanceStatus === 'excused_absence'
+                    ? 'Izin ketidakhadiran disetujui'
+                    : myRecord.attendanceStatus === 'late'
+                      ? `Kehadiran terlambat (${myRecord.lateMinutes ?? 0} menit)`
+                      : 'Kamu sudah hadir'}
                 </Text>
                 <Text style={styles.statusMessage}>
-                  Tercatat pada {formatDateTime(myRecord.attendanceTime)}. Presensi hanya dapat
-                  dilakukan satu kali per sesi (ID deterministik).
+                  {myRecord.attendanceStatus === 'excused_absence'
+                    ? 'Izin disetujui setelah sesi ditutup. Kamu tidak dikenai denda.'
+                    : myRecord.attendanceTime
+                      ? `Tercatat pada ${formatDateTime(myRecord.attendanceTime)}. Presensi hanya dapat dilakukan satu kali per sesi.`
+                      : 'Informasi waktu presensi tidak tersedia.'}
                 </Text>
               </View>
             </View>

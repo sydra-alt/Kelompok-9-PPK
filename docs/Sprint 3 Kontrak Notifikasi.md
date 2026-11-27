@@ -18,7 +18,7 @@
 
 Pengiriman berdasarkan peristiwa dan pemilihan penerima dikerjakan melalui [`src/services/notification-dispatch-service.ts`](../src/services/notification-dispatch-service.ts) (dengan mode default `client` ke Expo Push Service atau opsional `server` melalui Cloud Functions).
 
-## Implementasi Pengiriman & Kegagalan (Programmer 2)
+## Implementasi Pengiriman & Penanganan Kegagalan
 
 1. **Resolusi penerima & token:**
    - Event `session_opened` & `schedule_changed`: mengambil daftar `studentId` anggota kelas terkait dari `classMembers`, lalu membaca `users/{uid}.pushTokens` (format `ExponentPushToken[...]` / `ExpoPushToken[...]`).

@@ -26,7 +26,7 @@ import {
 import { getErrorMessage } from '@/services/errors';
 
 /**
- * Layar registrasi praktikan (PIC: Programmer 1).
+ * Layar registrasi praktikan.
  *
  * Sesuai kontrak keamanan Sprint 2:
  * - Pengguna yang mendaftar melalui aplikasi SELALU mendapatkan peran `praktikan`.

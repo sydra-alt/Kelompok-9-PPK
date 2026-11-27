@@ -7,7 +7,7 @@ import { COLLECTIONS, permissionRequestId, toPracticeSession } from '@/services/
 import type { UserProfile } from '@/types';
 
 /**
- * Pengajuan izin praktikan (PIC: Programmer 1).
+ * Layanan pengajuan izin praktikan.
  *
  * Alur:
  * 1. Validasi alasan di client (`validatePermissionReason`).

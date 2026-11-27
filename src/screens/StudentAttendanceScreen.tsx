@@ -112,8 +112,15 @@ export default function StudentAttendanceScreen() {
     setSubmitting(true);
     setFeedback(null);
     try {
-      await submitAttendance(session.id);
-      setFeedback('Presensi berhasil dicatat. Data kehadiran sudah tersimpan.');
+      const result = await submitAttendance(session.id);
+      if (result.attendanceStatus === 'late') {
+        const fine = result.fineAmount
+          ? ` Tagihan denda ${new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', maximumFractionDigits: 0 }).format(result.fineAmount)} akan muncul di halaman Tagihan.`
+          : ' Periksa halaman Tagihan untuk melihat denda yang dibuat backend.';
+        setFeedback(`Presensi berhasil dicatat sebagai terlambat ${result.lateMinutes} menit.${fine}`);
+      } else {
+        setFeedback('Presensi berhasil dicatat tepat waktu. Data tersimpan di backend.');
+      }
     } catch (error) {
       setFeedback(getErrorMessage(error, 'Presensi gagal. Periksa koneksi dan coba lagi.'));
     } finally {

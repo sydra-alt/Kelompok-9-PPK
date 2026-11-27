@@ -28,7 +28,7 @@ import type {
 } from '@/types';
 
 /**
- * Pembacaan data milik praktikan (PIC: Programmer 1). Semua fungsi memakai
+ * Pembacaan data milik praktikan. Semua fungsi memakai
  * listener real-time `onSnapshot` dan mengembalikan fungsi unsubscribe.
  *
  * Semua query difilter berdasarkan uid / keanggotaan kelas praktikan sehingga
@@ -191,7 +191,9 @@ export function subscribeStudentAttendance(
     { includeMetadataChanges: true },
     (snap) =>
       onData(
-        snap.docs.map(toAttendanceRecord).sort((a, b) => b.attendanceTime.localeCompare(a.attendanceTime)),
+        snap.docs.map(toAttendanceRecord).sort((a, b) =>
+          (b.attendanceTime ?? '').localeCompare(a.attendanceTime ?? ''),
+        ),
         { fromCache: snap.metadata.fromCache },
       ),
     onError,

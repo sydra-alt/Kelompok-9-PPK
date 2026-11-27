@@ -4,13 +4,14 @@ import { AppColors } from '@/constants/app-theme';
 import { useAuth } from '@/context/AuthContext';
 
 /**
- * Fondasi navigasi aplikasi (PIC: Programmer 1, koordinasi dengan Programmer 2).
+ * Navigasi utama aplikasi berdasarkan status autentikasi dan peran pengguna.
  *
  * Sprint 2: rute dilindungi dengan `Stack.Protected` berdasarkan status
  * autentikasi Firebase & peran tepercaya dari `users/{uid}`:
  * - Belum login / memulihkan sesi -> `/` (LoginScreen) & `/register`
  * - Peran `praktikan`             -> `/student/*`
- * - Peran `asisten`               -> `/assistant/*`
+ * - Peran `asisten`               -> `/assistant/*` (role lama dipertahankan)
+ * - Peran `aslab`                 -> `/aslab/*` (role terpisah dengan kewenangan lebih tinggi)
  */
 
 export const navigateTo = {
@@ -25,6 +26,8 @@ export const navigateTo = {
   studentLabsMap: () => router.push('/student/maps' as any),
   studentHistory: (studentId?: string) =>
     router.push({ pathname: '/student/history', params: studentId ? { studentId } : undefined }),
+  studentFines: () => router.push('/student/fines' as any),
+  studentPayments: () => router.push('/student/payments' as any),
   studentPermissions: () => router.push('/student/permissions' as any),
   assistantHome: (assistantId: string) =>
     router.push({ pathname: '/assistant', params: { assistantId } }),
@@ -32,6 +35,7 @@ export const navigateTo = {
     router.push({ pathname: '/assistant/session/[sessionId]', params: { assistantId, sessionId } }),
   assistantRecap: (assistantId: string, sessionId?: string) =>
     router.push({ pathname: '/assistant/recap', params: { assistantId, sessionId } }),
+  aslabHome: () => router.push('/aslab/index'),
 };
 
 export default function AppNavigator() {
@@ -40,8 +44,16 @@ export default function AppNavigator() {
   const isAuthenticated = status === 'authenticated' && Boolean(role);
   const isStudent = isAuthenticated && role === 'praktikan';
   const isAssistant = isAuthenticated && role === 'asisten';
+  const isLabAssistant = isAuthenticated && role === 'aslab';
 
-  const homeRoute = role === 'praktikan' ? '/student' : role === 'asisten' ? '/assistant' : '/';
+  const homeRoute =
+    role === 'praktikan'
+      ? '/student'
+      : role === 'asisten'
+        ? '/assistant'
+        : role === 'aslab'
+          ? '/aslab/index'
+          : '/';
 
   return (
     <Stack
@@ -59,8 +71,10 @@ export default function AppNavigator() {
         <Stack.Screen name="register" options={{ title: 'Registrasi Praktikan' }} />
       </Stack.Protected>
 
-      {/* Alur praktikan — Programmer 1 */}
-      <Stack.Protected guard={isStudent} redirectTo={isAssistant ? '/assistant' : '/'}>
+      {/* Alur praktikan */}
+      <Stack.Protected
+        guard={isStudent}
+        redirectTo={isAssistant ? '/assistant' : isLabAssistant ? '/aslab/index' : '/'}>
         <Stack.Screen
           name="student/index"
           options={{ title: 'Beranda Praktikan', headerBackVisible: false }}
@@ -72,17 +86,31 @@ export default function AppNavigator() {
           options={{ title: 'Peta Laboratorium', headerBackVisible: true }}
         />
         <Stack.Screen name="student/history" options={{ title: 'Riwayat Kehadiran' }} />
+        <Stack.Screen name="student/fines" options={{ title: 'Tagihan Denda' }} />
+        <Stack.Screen name="student/payments" options={{ title: 'Riwayat Pembayaran' }} />
         <Stack.Screen name="student/permissions" options={{ title: 'Pengajuan Izin' }} />
       </Stack.Protected>
 
-      {/* Alur asisten — Programmer 2 */}
-      <Stack.Protected guard={isAssistant} redirectTo={isStudent ? '/student' : '/'}>
+      {/* Alur asisten */}
+      <Stack.Protected
+        guard={isAssistant}
+        redirectTo={isStudent ? '/student' : isLabAssistant ? '/aslab/index' : '/'}>
         <Stack.Screen
           name="assistant/index"
           options={{ title: 'Dashboard Asisten', headerBackVisible: false }}
         />
         <Stack.Screen name="assistant/session/[sessionId]" options={{ title: 'Kelola Sesi' }} />
         <Stack.Screen name="assistant/recap" options={{ title: 'Rekap Kehadiran' }} />
+      </Stack.Protected>
+
+      {/* Aslab adalah role tersendiri dan berada di atas asisten. */}
+      <Stack.Protected
+        guard={isLabAssistant}
+        redirectTo={isStudent ? '/student' : isAssistant ? '/assistant' : '/'}>
+        <Stack.Screen
+          name="aslab/index"
+          options={{ title: 'Dashboard Aslab', headerBackVisible: false }}
+        />
       </Stack.Protected>
     </Stack>
   );

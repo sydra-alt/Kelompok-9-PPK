@@ -1,6 +1,6 @@
 # Konfigurasi Environment & Kontrak Skema Firestore (Sprint 2 & Sprint 3)
 
-Dokumen ini menjadi acuan bersama antara **Programmer 1** (Autentikasi, Alur Praktikan, Presensi Berbasis Lokasi, Peta Laboratorium, Penerimaan Notifikasi, Pengajuan Izin & AI Classifier) dan **Programmer 2** (Alur Asisten, CRUD Praktikum & Laboratorium, Manajemen Sesi, Rekap Lokasi, Keputusan Izin, Pengiriman Notifikasi & Security Rules).
+Dokumen ini menjelaskan konfigurasi environment, skema data Firestore, dan kontrak service layer aplikasi.
 
 ---
 
@@ -141,7 +141,7 @@ Pengajuan izin praktikan untuk sesi tertentu. ID dokumen deterministik: `permiss
 
 Seluruh kode layar tidak memanggil SDK Firestore secara langsung, melainkan melalui:
 
-### Programmer 1 (Praktikan, Autentikasi & Device Runtime)
+### Layanan praktikan, autentikasi & perangkat
 - [`src/services/auth-service.ts`](../src/services/auth-service.ts) — login, registrasi praktikan, reset sandi, logout, dan listener profil `users/{uid}`.
 - [`src/services/student-data-service.ts`](../src/services/student-data-service.ts) — listener real-time keanggotaan kelas, kelas, peserta, laboratorium, sesi, presensi, dan pengajuan izin milik praktikan.
 - [`src/services/attendance-service.ts`](../src/services/attendance-service.ts) — validasi status sesi, cek radius laboratorium (Haversine via [`src/utils/distance.ts`](../src/utils/distance.ts)), dan transaksi presensi anti-duplikat.
@@ -150,7 +150,7 @@ Seluruh kode layar tidak memanggil SDK Firestore secara langsung, melainkan mela
 - [`src/services/permission-service.ts`](../src/services/permission-service.ts) — validasi alasan, transaksi pembuatan pengajuan izin (`pending`), dan pembaruan hasil klasifikasi AI.
 - [`src/services/ai-classifier.ts`](../src/services/ai-classifier.ts) — pemanggilan HTTP ke API AI dari pengajar dengan timeout & fallback aman.
 
-### Programmer 2 (Asisten, Laboratorium, Push Dispatch & Security Rules)
+### Layanan asisten, laboratorium, push dispatch & security rules
 - [`src/services/assistant-data-service.ts`](../src/services/assistant-data-service.ts) — listener real-time dan CRUD kelas, peserta, sesi (beserta relasi `labId`/`labName`), pembukaan/penutupan sesi, rekap presensi, dan keputusan izin.
 - [`src/services/lab-service.ts`](../src/services/lab-service.ts) — listener real-time dan CRUD koleksi `labs` beserta validasi rentang koordinat dan radius.
 - [`src/services/notification-dispatch-service.ts`](../src/services/notification-dispatch-service.ts) — pemicu & pengiriman push notification non-blocking untuk event `session_opened`, `schedule_changed`, serta `permission_approved`/`permission_rejected`.

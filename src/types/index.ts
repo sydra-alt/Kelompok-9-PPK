@@ -13,14 +13,14 @@
 // ---------------------------------------------------------------------------
 
 /** Peran tepercaya yang tersimpan di `users/{uid}.role`. */
-export type UserRole = 'praktikan' | 'asisten';
+export type UserRole = 'praktikan' | 'asisten' | 'aslab';
 
 /** Profil pengguna di koleksi `users/{uid}` (ID dokumen = uid Firebase Auth). */
 export interface UserProfile {
   uid: string;
   name: string;
   email: string;
-  /** NIM untuk praktikan, ID asisten untuk asisten. */
+  /** NIM untuk praktikan; ID/NIP untuk asisten atau aslab. */
   identifier: string;
   role: UserRole;
   /** Format waktu lokal: YYYY-MM-DDTHH:mm:ss (null jika belum tersinkron). */
@@ -113,7 +113,9 @@ export interface PracticeSession {
 // Presensi
 // ---------------------------------------------------------------------------
 
-/** Dokumen `attendance/{sessionId}_{studentId}` (ID deterministik → anti presensi ganda). */
+export type AttendanceStatus = 'on_time' | 'late' | 'excused_absence';
+
+/** Dokumen `attendance/{sessionId}_{studentId}` (ID deterministik mencegah duplikasi). */
 export interface AttendanceRecord {
   id: string;
   sessionId: string;
@@ -121,8 +123,10 @@ export interface AttendanceRecord {
   studentId: string;
   studentName: string;
   studentIdentifier?: string;
-  /** Format waktu lokal: YYYY-MM-DDTHH:mm:ss */
-  attendanceTime: string;
+  /** Format lokal Asia/Jakarta: YYYY-MM-DDTHH:mm:ss; null untuk excused absence. */
+  attendanceTime: string | null;
+  attendanceStatus?: AttendanceStatus;
+  lateMinutes?: number;
   latitude?: number;
   longitude?: number;
   distanceMeters?: number;
