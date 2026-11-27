@@ -1,0 +1,67 @@
+{
+  "project_info": {
+    "project_number": "607806124100",
+    "project_id": "autentikasi-mahasiswa",
+    "storage_bucket": "autentikasi-mahasiswa.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:607806124100:android:30e4d58f95cf1e20268c11",
+        "android_client_info": {
+          "package_name": "com.company.sprint"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDIqPtlpEcyNn9qcCEmubxwPfQOPhd2T9k"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    },
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:607806124100:android:d0dd6a2f5e3f85d0268c11",
+        "android_client_info": {
+          "package_name": "com.me.loginmhs"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDIqPtlpEcyNn9qcCEmubxwPfQOPhd2T9k"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    },
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:607806124100:android:c94dde0905f95f1c268c11",
+        "android_client_info": {
+          "package_name": "com.sirielfahri.ppkrnexpo58"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDIqPtlpEcyNn9qcCEmubxwPfQOPhd2T9k"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
