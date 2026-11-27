@@ -110,7 +110,7 @@ export default function StudentHomeScreen() {
     return (
       <LoadingState
         title="Memuat beranda praktikan..."
-        message="Mengambil data kelas, jadwal sesi, dan presensi dari Firestore."
+        message="Menyiapkan kelas dan jadwal praktikum."
       />
     );
   }
@@ -128,7 +128,6 @@ export default function StudentHomeScreen() {
   }
 
   const openCount = sessions.filter((s) => s.status === 'open').length;
-  const pendingPermissionCount = permissionRequests.filter((p) => p.status === 'pending').length;
 
   return (
     <>
@@ -230,17 +229,6 @@ export default function StudentHomeScreen() {
                 title="📋 Riwayat Kehadiran"
                 variant="secondary"
                 onPress={() => navigateTo.studentHistory(profile.uid)}
-                style={styles.actionButton}
-              />
-              <AppButton
-                testID="open-permissions-button"
-                title={
-                  pendingPermissionCount > 0
-                    ? `📝 Izin (${pendingPermissionCount} menunggu)`
-                    : '📝 Pengajuan Izin'
-                }
-                variant="secondary"
-                onPress={navigateTo.studentPermissions}
                 style={styles.actionButton}
               />
             </View>

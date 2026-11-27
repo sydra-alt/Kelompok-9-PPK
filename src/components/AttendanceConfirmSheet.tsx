@@ -56,7 +56,7 @@ export function AttendanceConfirmSheet({
     <Modal
       visible={visible}
       transparent
-      animationType="slide"
+      animationType="fade"
       onShow={resetForm}
       onRequestClose={onCancel}>
       <View style={styles.root}>

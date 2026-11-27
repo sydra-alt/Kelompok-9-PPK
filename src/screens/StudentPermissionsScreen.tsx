@@ -45,7 +45,7 @@ export default function StudentPermissionsScreen() {
     return (
       <LoadingState
         title="Memuat daftar pengajuan izin..."
-        message="Menyinkronkan status pengajuan izin dari Firestore."
+        message="Menyiapkan status pengajuan izinmu."
       />
     );
   }

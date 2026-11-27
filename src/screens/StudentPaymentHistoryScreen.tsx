@@ -76,7 +76,7 @@ export default function StudentPaymentHistoryScreen() {
           <View style={styles.summaryCard}>
             <Text style={styles.summaryTitle}>Riwayat Pembayaran</Text>
             <Text style={styles.summaryText}>
-              Status transaksi disinkronkan dari Firestore setelah diverifikasi backend. Menutup halaman checkout tidak berarti pembayaran berhasil.
+              Status pembayaran diperbarui setelah transaksi dikonfirmasi. Menutup halaman checkout tidak berarti pembayaran berhasil.
             </Text>
           </View>
           <AppButton title="Kembali ke Tagihan" variant="secondary" onPress={navigateTo.studentFines} />

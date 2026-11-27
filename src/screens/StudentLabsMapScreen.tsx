@@ -193,7 +193,7 @@ export default function StudentLabsMapScreen() {
       },
       (error) => {
         setLabsLoading(false);
-        setLabsError(getErrorMessage(error, 'Gagal memuat laboratorium dari Firestore.'));
+        setLabsError(getErrorMessage(error, 'Daftar laboratorium tidak dapat dimuat. Coba lagi.'));
       },
     );
   }, [labsRetryKey]);
@@ -381,7 +381,7 @@ export default function StudentLabsMapScreen() {
       <Modal
         visible={Boolean(selectedLab)}
         transparent
-        animationType="slide"
+        animationType="fade"
         statusBarTranslucent
         onRequestClose={() => setSelectedLabId(null)}>
         <View style={styles.sheetRoot}>

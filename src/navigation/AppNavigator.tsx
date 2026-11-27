@@ -33,7 +33,7 @@ export const navigateTo = {
     router.push({ pathname: '/assistant', params: { assistantId } }),
   assistantSession: (assistantId: string, sessionId: string) =>
     router.push({ pathname: '/assistant/session/[sessionId]', params: { assistantId, sessionId } }),
-  assistantRecap: (assistantId: string, sessionId?: string) =>
+  assistantRecap: (assistantId: string, sessionId: string) =>
     router.push({ pathname: '/assistant/recap', params: { assistantId, sessionId } }),
   aslabHome: () => router.push('/aslab'),
 };

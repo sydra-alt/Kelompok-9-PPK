@@ -71,7 +71,7 @@ export function PermissionRequestSheet({
     <Modal
       visible={visible}
       transparent
-      animationType="slide"
+      animationType="fade"
       onShow={resetForm}
       onRequestClose={onCancel}>
       <KeyboardAvoidingView

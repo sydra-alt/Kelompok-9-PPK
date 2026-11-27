@@ -122,7 +122,7 @@ export default function StudentAttendanceHistoryScreen() {
     return (
       <LoadingState
         title="Memuat riwayat kehadiran..."
-        message="Mengambil catatan presensi praktikan dari Firestore."
+        message="Menyiapkan riwayat kehadiranmu."
       />
     );
   }

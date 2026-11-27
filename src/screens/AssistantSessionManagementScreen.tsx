@@ -228,7 +228,7 @@ export default function AssistantSessionManagementScreen() {
           <View style={styles.attendanceHeader}>
             <View>
               <Text style={styles.cardTitle}>Kehadiran Praktikan</Text>
-              <Text style={styles.muted}>Tersinkronisasi langsung dari Firestore</Text>
+              <Text style={styles.muted}>Daftar kehadiran sesi ini</Text>
             </View>
             <View style={styles.countBadge}>
               <Text style={styles.count}>{records.length}</Text>

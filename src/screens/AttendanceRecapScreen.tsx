@@ -9,8 +9,6 @@ import { StatusBadge } from '@/components/StatusBadge';
 import { AppColors, CardShadow, Radius } from '@/constants/app-theme';
 import { Spacing } from '@/constants/theme';
 import { useAssistantData } from '@/context/AssistantDataContext';
-import { useAuth } from '@/context/AuthContext';
-import { getUserById } from '@/data/users';
 import { navigateTo } from '@/navigation/AppNavigator';
 import { formatClock, formatDate, formatTimeRange } from '@/utils/format';
 
@@ -19,19 +17,18 @@ import { formatClock, formatDate, formatTimeRange } from '@/utils/format';
  * Menampilkan identitas praktikan, sesi praktikum, tanggal, dan waktu presensi.
  */
 export default function AttendanceRecapScreen() {
-  const { assistantId, sessionId: requestedSessionId } = useLocalSearchParams<{
+  const { assistantId, sessionId } = useLocalSearchParams<{
     assistantId: string;
-    sessionId?: string;
+    sessionId: string;
   }>();
-
-  const { profile } = useAuth();
-  const dummyAssistant = getUserById(assistantId);
-  const assistantName = profile?.name ?? dummyAssistant?.name ?? 'Asisten';
+  const [filter, setFilter] = useState<'hadir' | 'izin' | 'lainnya'>('hadir');
 
   const {
     labs,
     sessions,
     attendance,
+    permissionRequests,
+    members,
     loading,
     error,
     fromCache,
@@ -39,43 +36,45 @@ export default function AttendanceRecapScreen() {
     retry,
   } = useAssistantData();
 
-  const assignedSessions = useMemo(
-    () =>
-      sessions.slice().sort((a, b) => `${a.date}${a.startTime}`.localeCompare(`${b.date}${b.startTime}`)),
-    [sessions],
-  );
-
-  const [selectedId, setSelectedId] = useState(requestedSessionId ?? '');
-
-  const effectiveId = assignedSessions.some((session) => session.id === selectedId)
-    ? selectedId
-    : assignedSessions.find((session) => session.id === requestedSessionId)?.id ??
-      assignedSessions[0]?.id ??
-      '';
-
-  const selectedSession = assignedSessions.find((session) => session.id === effectiveId);
+  const selectedSession = useMemo(() => sessions.find((session) => session.id === sessionId), [sessions, sessionId]);
   const selectedLab = selectedSession?.labId
     ? labs.find((lab) => lab.id === selectedSession.labId)
     : undefined;
-  const records = attendance.filter((record) => record.sessionId === effectiveId);
-  const locationVerifiedCount = records.filter(
-    (record) =>
-      record.latitude !== undefined &&
-      record.longitude !== undefined &&
-      record.distanceMeters !== undefined,
-  ).length;
+  const sessionRecords = attendance.filter((record) => record.sessionId === sessionId);
+  const sessionPermissions = permissionRequests.filter((request) => request.sessionId === sessionId);
+  const records = sessionRecords.filter((record) =>
+    filter === 'hadir'
+      ? record.attendanceStatus !== 'excused_absence'
+      : filter === 'izin'
+        ? record.attendanceStatus === 'excused_absence'
+        : false,
+  );
+  const otherRequests = filter === 'lainnya'
+    ? sessionPermissions.filter((request) => request.status !== 'approved')
+    : [];
+  const absentMembers = filter === 'lainnya' && selectedSession?.status === 'closed'
+    ? members.filter((member) =>
+        member.classId === selectedSession.classId &&
+        !sessionRecords.some((record) => record.studentId === member.studentId) &&
+        !sessionPermissions.some((request) => request.studentId === member.studentId),
+      )
+    : [];
+  const permissionRecords = filter === 'izin'
+    ? sessionPermissions.filter((request) => request.status === 'approved' &&
+        !sessionRecords.some((record) => record.studentId === request.studentId && record.attendanceStatus === 'excused_absence'))
+    : [];
 
-  if (loading && assignedSessions.length === 0) {
+  if (loading && !selectedSession) {
     return <LoadingState title="Memuat rekap kehadiran..." />;
   }
 
-  if (!assignedSessions.length) {
+  if (!selectedSession) {
     return (
       <View style={styles.content}>
         <EmptyState
           icon="📋"
-          title="Belum ada jadwal praktikum"
-          message={`Belum ada sesi praktikum yang tersedia untuk direkap.`}
+          title="Sesi tidak ditemukan"
+          message="Kembali ke daftar sesi dan buka rekap dari detail sesi yang dipilih."
           actionLabel="Kembali ke Dashboard"
           onAction={() => navigateTo.assistantHome(assistantId)}
         />
@@ -86,12 +85,8 @@ export default function AttendanceRecapScreen() {
   return (
     <ScrollView contentContainerStyle={styles.content}>
       <View style={styles.heading}>
-        <Text style={styles.eyebrow}>RUANG ASISTEN</Text>
         <Text style={styles.title}>Rekap Presensi Praktikum</Text>
-        <Text style={styles.subtitle}>
-          Daftar praktikan hadir untuk kelas asisten {assistantName} tersinkronisasi langsung dari
-          Cloud Firestore secara real-time.
-        </Text>
+        <Text style={styles.subtitle}>{selectedSession.practicalName} · {selectedSession.className}</Text>
       </View>
 
       <ConnectionBanner
@@ -101,41 +96,16 @@ export default function AttendanceRecapScreen() {
         onRetry={retry}
       />
 
-      <Text style={styles.sectionLabel}>Pilih Sesi Praktikum</Text>
-      <ScrollView
-        horizontal
-        showsHorizontalScrollIndicator={false}
-        contentContainerStyle={styles.sessionPicker}>
-        {assignedSessions.map((session) => {
-          const selected = session.id === effectiveId;
-          const sessionRecordsCount = attendance.filter((a) => a.sessionId === session.id).length;
-          return (
-            <Pressable
-              key={session.id}
-              onPress={() => setSelectedId(session.id)}
-              accessibilityRole="tab"
-              accessibilityState={{ selected }}
-              style={[styles.sessionChoice, selected && styles.sessionChoiceSelected]}>
-              <View style={styles.choiceHeaderRow}>
-                <Text style={[styles.choiceClass, selected && styles.choiceTextSelected]}>
-                  {session.className}
-                </Text>
-                <Text style={[styles.choiceBadge, selected && styles.choiceBadgeSelected]}>
-                  {sessionRecordsCount} hadir
-                </Text>
-              </View>
-              <Text
-                numberOfLines={1}
-                style={[styles.choiceName, selected && styles.choiceTextSelected]}>
-                {session.practicalName}
-              </Text>
-              <Text style={[styles.choiceDate, selected && styles.choiceTextSelected]}>
-                {formatDate(session.date)}
-              </Text>
-            </Pressable>
-          );
-        })}
-      </ScrollView>
+      <View style={styles.filterRow}>
+        {(['hadir', 'izin', 'lainnya'] as const).map((value) => (
+          <Pressable key={value} accessibilityRole="button" accessibilityState={{ selected: filter === value }}
+            onPress={() => setFilter(value)} style={[styles.filterChip, filter === value && styles.filterChipSelected]}>
+            <Text style={[styles.filterText, filter === value && styles.filterTextSelected]}>
+              {value === 'hadir' ? 'Hadir' : value === 'izin' ? 'Izin' : 'Lainnya'}
+            </Text>
+          </Pressable>
+        ))}
+      </View>
 
       {selectedSession ? (
         <>
@@ -151,12 +121,6 @@ export default function AttendanceRecapScreen() {
                   {selectedLab?.name ?? selectedSession.labName ?? selectedSession.room ?? 'Lokasi belum ditentukan'}
                   {selectedLab?.building ? ` (${selectedLab.building})` : ''}
                 </Text>
-                {selectedLab ? (
-                  <Text style={styles.sessionLabMeta}>
-                    📍 Radius validasi: {selectedLab.radiusMeters} m (
-                    {selectedLab.latitude.toFixed(5)}, {selectedLab.longitude.toFixed(5)})
-                  </Text>
-                ) : null}
                 {selectedSession.topic ? (
                   <Text style={styles.sessionTopic}>Topik: {selectedSession.topic}</Text>
                 ) : null}
@@ -168,10 +132,7 @@ export default function AttendanceRecapScreen() {
               <View>
                 <Text style={styles.totalLabel}>Total praktikan hadir</Text>
                 <Text style={styles.totalValue}>
-                  {records.length} <Text style={styles.totalUnit}>orang</Text>
-                </Text>
-                <Text style={styles.locationSummary}>
-                  Tervalidasi lokasi: {locationVerifiedCount}/{records.length}
+                  {sessionRecords.filter((record) => record.attendanceStatus !== 'excused_absence').length} <Text style={styles.totalUnit}>orang</Text>
                 </Text>
               </View>
               <View style={styles.totalIcon}>
@@ -181,8 +142,8 @@ export default function AttendanceRecapScreen() {
           </View>
 
           <View style={styles.listHeading}>
-            <Text style={styles.listTitle}>Daftar Kehadiran Praktikan</Text>
-            <Text style={styles.listCount}>{records.length} praktikan hadir</Text>
+            <Text style={styles.listTitle}>{filter === 'hadir' ? 'Praktikan Hadir' : filter === 'izin' ? 'Praktikan Izin' : 'Status Lainnya'}</Text>
+            <Text style={styles.listCount}>{records.length + permissionRecords.length + otherRequests.length + absentMembers.length} praktikan</Text>
           </View>
 
           {records.length > 0 ? (
@@ -216,6 +177,11 @@ export default function AttendanceRecapScreen() {
                           ? `NIM ${record.studentIdentifier}`
                           : `UID: ${record.studentId}`}
                       </Text>
+                      <Text style={styles.statusLabel}>
+                        {record.attendanceStatus === 'late'
+                          ? `Terlambat ${record.lateMinutes ?? 0} menit`
+                          : 'Tepat waktu'}
+                      </Text>
 
                       {hasLocation ? (
                         <View style={styles.recordLocationBox}>
@@ -243,9 +209,6 @@ export default function AttendanceRecapScreen() {
                               </Text>
                             </View>
                           </View>
-                          <Text style={styles.coordText}>
-                            Koordinat: {record.latitude!.toFixed(5)}, {record.longitude!.toFixed(5)}
-                          </Text>
                         </View>
                       ) : (
                         <Text style={styles.noLocationText}>Metadata lokasi tidak tersedia</Text>
@@ -261,23 +224,30 @@ export default function AttendanceRecapScreen() {
                 );
               })}
             </View>
+          ) : permissionRecords.length + otherRequests.length + absentMembers.length > 0 ? (
+            <View style={styles.recordsCard}>
+              {[...permissionRecords.map((request) => ({ name: request.studentName, identifier: request.studentIdentifier, status: 'Izin disetujui' })),
+                ...otherRequests.map((request) => ({ name: request.studentName, identifier: request.studentIdentifier, status: request.status === 'pending' ? 'Menunggu keputusan' : 'Izin ditolak' })),
+                ...absentMembers.map((member) => ({ name: member.studentName, identifier: member.studentIdentifier, status: 'Tidak hadir tanpa izin' }))].map((item, index) => (
+                <View key={`${item.identifier}-${item.status}`} style={[styles.recordRow, index > 0 && styles.lastRecordRow]}>
+                  <View style={styles.studentInfo}>
+                    <Text style={styles.studentName}>{item.name}</Text>
+                    <Text style={styles.studentId}>NIM {item.identifier}</Text>
+                  </View>
+                  <Text style={styles.timeValue}>{item.status}</Text>
+                </View>
+              ))}
+            </View>
           ) : (
             <View style={styles.emptyCard}>
               <EmptyState
                 icon="◷"
-                title="Belum ada presensi"
-                message="Daftar praktikan yang hadir akan muncul di sini secara otomatis saat presensi dilakukan."
+                title={filter === 'hadir' ? 'Belum ada praktikan hadir' : filter === 'izin' ? 'Belum ada izin disetujui' : 'Belum ada status lainnya'}
+                message={filter === 'hadir' ? 'Presensi praktikan pada sesi ini akan ditampilkan di sini.' : 'Belum ada praktikan dengan status ini pada sesi tersebut.'}
               />
             </View>
           )}
 
-          <View style={styles.note}>
-            <Text style={styles.noteIcon}>⚡</Text>
-            <Text style={styles.noteText}>
-              Data presensi disinkronkan secara real-time dari Cloud Firestore. Setiap kali praktikan
-              melakukan presensi, daftar di atas langsung diperbarui otomatis tanpa reload.
-            </Text>
-          </View>
         </>
       ) : null}
     </ScrollView>
@@ -313,6 +283,31 @@ const styles = StyleSheet.create({
     fontSize: 13,
     marginTop: Spacing.one,
     lineHeight: 18,
+  },
+  filterRow: {
+    flexDirection: 'row',
+    gap: Spacing.two,
+  },
+  filterChip: {
+    flex: 1,
+    alignItems: 'center',
+    paddingVertical: Spacing.two + 2,
+    borderRadius: Radius.pill,
+    borderWidth: 1,
+    borderColor: AppColors.border,
+    backgroundColor: AppColors.surface,
+  },
+  filterChipSelected: {
+    backgroundColor: AppColors.primary,
+    borderColor: AppColors.primary,
+  },
+  filterText: {
+    color: AppColors.textMuted,
+    fontSize: 13,
+    fontWeight: '700',
+  },
+  filterTextSelected: {
+    color: AppColors.textOnPrimary,
   },
   sectionLabel: {
     color: AppColors.text,
@@ -515,6 +510,12 @@ const styles = StyleSheet.create({
     color: AppColors.textMuted,
     fontSize: 11,
     marginTop: 2,
+  },
+  statusLabel: {
+    color: AppColors.success,
+    fontSize: 11,
+    fontWeight: '700',
+    marginTop: 4,
   },
   recordLocationBox: {
     marginTop: 6,

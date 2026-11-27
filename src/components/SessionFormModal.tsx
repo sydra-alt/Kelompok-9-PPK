@@ -11,6 +11,7 @@ import {
   TextInput,
   View,
 } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { AppButton } from '@/components/AppButton';
 import { AppColors, Radius } from '@/constants/app-theme';
@@ -83,7 +84,7 @@ export function SessionFormModal({
     <Modal
       visible={visible}
       transparent
-      animationType="slide"
+      animationType="fade"
       onRequestClose={onClose}
       statusBarTranslucent>
       <View style={styles.backdrop}>
@@ -116,6 +117,7 @@ function SessionFormContent({
   onClose: () => void;
   onSubmit: (data: SessionFormValues) => Promise<void>;
 }) {
+  const insets = useSafeAreaInsets();
   const todayDate = getJakartaNowParts().date;
   const isCreating = !initialData;
 
@@ -303,10 +305,7 @@ function SessionFormContent({
           ) : null}
 
           <View style={styles.field}>
-            <Text style={styles.label}>Pilih Laboratorium (Wajib untuk Presensi Lokasi)</Text>
-            <Text style={styles.fieldHint}>
-              Lokasi dan radius diambil dari dokumen laboratorium di Firestore.
-            </Text>
+            <Text style={styles.label}>Pilih Laboratorium</Text>
             {labs.length === 0 ? (
               <Text style={styles.noClassesWarning}>
                 Belum ada laboratorium. Tambahkan laboratorium di tab Lab terlebih dahulu.
@@ -325,7 +324,7 @@ function SessionFormContent({
                       style={[styles.chip, selected && styles.chipSelected]}>
                       <Text style={[styles.chipText, selected && styles.chipTextSelected]}>
                         {lab.name}
-                        {lab.building ? ` (${lab.building})` : ''} • {lab.radiusMeters} m
+                        {lab.building ? ` (${lab.building})` : ''}
                       </Text>
                     </Pressable>
                   );
@@ -400,7 +399,7 @@ function SessionFormContent({
           </View>
 
         </ScrollView>
-        <View style={styles.sheetFooter}>
+        <View style={[styles.sheetFooter, { paddingBottom: Math.max(insets.bottom, Spacing.three) }]}>
           <AppButton
             title={submitting ? 'Menyimpan...' : initialData ? 'Simpan Perubahan' : 'Tambah Sesi'}
             onPress={() => void handleSubmit()}

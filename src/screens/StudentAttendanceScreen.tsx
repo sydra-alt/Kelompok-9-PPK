@@ -145,7 +145,7 @@ export default function StudentAttendanceScreen() {
     return (
       <LoadingState
         title="Memuat halaman presensi..."
-        message="Mengambil informasi sesi dari Firestore."
+        message="Menyiapkan informasi sesi praktikum."
       />
     );
   }

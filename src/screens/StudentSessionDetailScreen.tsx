@@ -102,7 +102,7 @@ export default function StudentSessionDetailScreen() {
     return (
       <LoadingState
         title="Memuat detail sesi..."
-        message="Menyinkronkan status sesi dan kehadiran secara real-time."
+        message="Menyiapkan detail sesi praktikum."
       />
     );
   }
@@ -373,11 +373,6 @@ export default function StudentSessionDetailScreen() {
                 </Text>
               )}
 
-              <AppButton
-                title="Lihat Semua Pengajuan Izin"
-                variant="secondary"
-                onPress={navigateTo.studentPermissions}
-              />
             </View>
           ) : (
             <>

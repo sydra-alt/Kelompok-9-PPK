@@ -26,6 +26,7 @@ import type {
   PracticeClass,
   PracticeSession,
 } from '@/types';
+import { getJakartaNowParts, isWithinSessionWindow } from '@/utils/session-time';
 
 /**
  * Pembacaan data milik praktikan. Semua fungsi memakai
@@ -75,8 +76,16 @@ export function subscribeLab(
   );
 }
 
-const bySchedule = (a: PracticeSession, b: PracticeSession) =>
-  `${a.date}${a.startTime}`.localeCompare(`${b.date}${b.startTime}`);
+const bySchedule = (a: PracticeSession, b: PracticeSession) => {
+  const now = getJakartaNowParts();
+  const nowKey = `${now.date}T${now.time}`;
+  const aKey = `${a.date}T${a.startTime}`;
+  const bKey = `${b.date}T${b.startTime}`;
+  const aUpcoming = (a.status === 'open' && isWithinSessionWindow(a)) || aKey >= nowKey;
+  const bUpcoming = (b.status === 'open' && isWithinSessionWindow(b)) || bKey >= nowKey;
+  if (aUpcoming !== bUpcoming) return aUpcoming ? -1 : 1;
+  return aUpcoming ? aKey.localeCompare(bKey) : bKey.localeCompare(aKey);
+};
 
 /** Keanggotaan kelas praktikan: `classMembers` where studentId == uid. */
 export function subscribeStudentMemberships(

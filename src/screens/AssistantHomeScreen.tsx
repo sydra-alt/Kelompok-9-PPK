@@ -245,7 +245,7 @@ export default function AssistantHomeScreen() {
       <View style={styles.loadingContainer}>
         <LoadingState
           title="Memuat data asisten..."
-          message="Menghubungkan ke Firestore dan menyinkronkan data praktikum."
+          message="Menyiapkan jadwal dan data praktikum."
         />
       </View>
     );
@@ -330,14 +330,6 @@ export default function AssistantHomeScreen() {
                 onClose={() => setFeedback(null)}
               />
             ) : null}
-
-            {/* Tombol Cepat Rekap Presensi */}
-            <AppButton
-              testID="open-attendance-recap"
-              title="📊 Buka Rekap Presensi Real-Time"
-              variant="secondary"
-              onPress={() => navigateTo.assistantRecap(profile?.uid ?? assistantIdentifier)}
-            />
 
             {/* Tab Navigation */}
             <View style={styles.tabBar}>
