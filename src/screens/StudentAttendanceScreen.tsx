@@ -1,6 +1,6 @@
 import { router, useLocalSearchParams } from 'expo-router';
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { Linking, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Linking, Modal, ScrollView, StyleSheet, Text, View } from 'react-native';
 
 import { AppButton } from '@/components/AppButton';
 import { ConnectionBanner } from '@/components/ConnectionBanner';
@@ -35,6 +35,7 @@ export default function StudentAttendanceScreen() {
   const [checkingLocation, setCheckingLocation] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [feedback, setFeedback] = useState<string | null>(null);
+  const [successModalMessage, setSuccessModalMessage] = useState<string | null>(null);
 
   const session = sessionSnapshot ?? sessions.find((item) => item.id === sessionId) ?? null;
   const labState = session?.labId && labSnapshot?.labId === session.labId ? labSnapshot : null;
@@ -117,9 +118,9 @@ export default function StudentAttendanceScreen() {
         const fine = result.fineAmount
           ? ` Tagihan denda ${new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', maximumFractionDigits: 0 }).format(result.fineAmount)} akan muncul di halaman Tagihan.`
           : ' Periksa halaman Tagihan untuk melihat denda yang dibuat backend.';
-        setFeedback(`Presensi berhasil dicatat sebagai terlambat ${result.lateMinutes} menit.${fine}`);
+        setSuccessModalMessage(`Presensi tercatat terlambat ${result.lateMinutes} menit.${fine}`);
       } else {
-        setFeedback('Presensi berhasil dicatat tepat waktu. Data tersimpan di backend.');
+        setSuccessModalMessage('Presensi berhasil dicatat tepat waktu. Data kehadiranmu sudah tersimpan.');
       }
     } catch (error) {
       setFeedback(getErrorMessage(error, 'Presensi gagal. Periksa koneksi dan coba lagi.'));
@@ -150,6 +151,7 @@ export default function StudentAttendanceScreen() {
   }
 
   return (
+    <>
     <ScrollView contentContainerStyle={styles.content}>
       <ConnectionBanner isOffline={isOffline} fromCache={fromCache} error={null} />
 
@@ -216,6 +218,27 @@ export default function StudentAttendanceScreen() {
         />
       </View>
     </ScrollView>
+    <Modal
+      visible={successModalMessage !== null}
+      transparent
+      animationType="fade"
+      onRequestClose={() => setSuccessModalMessage(null)}>
+      <View style={styles.modalBackdrop}>
+        <View style={styles.successModal} accessibilityViewIsModal>
+          <View style={styles.successIcon}><Text style={styles.successIconText}>✓</Text></View>
+          <Text style={styles.successTitle}>Presensi Berhasil</Text>
+          <Text style={styles.successMessage}>{successModalMessage}</Text>
+          <AppButton
+            title="Kembali ke Beranda"
+            onPress={() => {
+              setSuccessModalMessage(null);
+              router.replace('/student');
+            }}
+          />
+        </View>
+      </View>
+    </Modal>
+    </>
   );
 }
 
@@ -270,4 +293,10 @@ const styles = StyleSheet.create({
   warning: { backgroundColor: AppColors.warningSoft },
   danger: { backgroundColor: AppColors.dangerSoft },
   noticeText: { color: AppColors.text, fontSize: 13, lineHeight: 19 },
+  modalBackdrop: { flex: 1, justifyContent: 'center', alignItems: 'center', padding: Spacing.four, backgroundColor: AppColors.overlay },
+  successModal: { width: '100%', maxWidth: 420, backgroundColor: AppColors.surface, borderRadius: Radius.xl, padding: Spacing.five, alignItems: 'center', gap: Spacing.three, ...CardShadow },
+  successIcon: { width: 58, height: 58, borderRadius: Radius.pill, alignItems: 'center', justifyContent: 'center', backgroundColor: AppColors.successSoft },
+  successIconText: { color: AppColors.success, fontSize: 30, fontWeight: '800' },
+  successTitle: { color: AppColors.text, fontSize: 20, fontWeight: '800', textAlign: 'center' },
+  successMessage: { color: AppColors.textMuted, fontSize: 14, lineHeight: 21, textAlign: 'center' },
 });

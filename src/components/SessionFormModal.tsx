@@ -15,9 +15,29 @@ import { AppButton } from '@/components/AppButton';
 import { AppColors, Radius } from '@/constants/app-theme';
 import { Spacing } from '@/constants/theme';
 import type { Lab, PracticeClass, PracticeSession } from '@/types';
+import { getJakartaNowParts, isSessionStartAllowed } from '@/utils/session-time';
 
 const DATE_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
 const TIME_PATTERN = /^([01]\d|2[0-3]):[0-5]\d$/;
+const TIME_OPTIONS = Array.from({ length: 96 }, (_, index) => {
+  const minutes = index * 15;
+  return `${String(Math.floor(minutes / 60)).padStart(2, '0')}:${String(minutes % 60).padStart(2, '0')}`;
+});
+
+function dateKey(date: Date): string {
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
+}
+
+function dateFromKey(value: string): Date {
+  const [year, month, day] = value.split('-').map(Number);
+  return new Date(year, month - 1, day, 12);
+}
+
+function formatDateLabel(value: string): string {
+  return dateFromKey(value).toLocaleDateString('id-ID', {
+    weekday: 'long', day: 'numeric', month: 'long', year: 'numeric',
+  });
+}
 
 export interface SessionFormValues {
   classId: string;
@@ -91,11 +111,8 @@ function SessionFormContent({
   onClose: () => void;
   onSubmit: (data: SessionFormValues) => Promise<void>;
 }) {
-  const today = new Date();
-  const yyyy = today.getFullYear();
-  const mm = String(today.getMonth() + 1).padStart(2, '0');
-  const dd = String(today.getDate()).padStart(2, '0');
-  const todayDate = `${yyyy}-${mm}-${dd}`;
+  const todayDate = getJakartaNowParts().date;
+  const isCreating = !initialData;
 
   const [selectedClassId, setSelectedClassId] = useState(
     initialData?.classId ?? classes[0]?.id ?? '',
@@ -106,8 +123,14 @@ function SessionFormContent({
     : labs[0]?.id ?? '';
   const initialLab = labs.find((l) => l.id === selectedLabId);
   const [date, setDate] = useState(initialData?.date ?? todayDate);
-  const [startTime, setStartTime] = useState(initialData?.startTime ?? '08:00');
-  const [endTime, setEndTime] = useState(initialData?.endTime ?? '10:00');
+  const initialStart = initialData?.startTime ?? TIME_OPTIONS.find((option) => option >= getJakartaNowParts().time && option < '23:45') ?? '08:00';
+  const [startTime, setStartTime] = useState(initialStart);
+  const [endTime, setEndTime] = useState(initialData?.endTime ?? TIME_OPTIONS.find((option) => option > initialStart) ?? '');
+  const [activePicker, setActivePicker] = useState<'date' | 'start' | 'end' | null>(null);
+  const [calendarMonth, setCalendarMonth] = useState(() => {
+    const selected = dateFromKey(initialData?.date ?? todayDate);
+    return new Date(selected.getFullYear(), selected.getMonth(), 1);
+  });
   const [topic, setTopic] = useState(initialData?.topic ?? '');
   const [room, setRoom] = useState(initialData?.room ?? initialLab?.name ?? '');
   const [assistantName, setAssistantName] = useState(
@@ -124,6 +147,40 @@ function SessionFormContent({
       setRoom(nextLab.name);
     }
   };
+
+  const chooseDate = (nextDate: Date) => {
+    const nextDateKey = dateKey(nextDate);
+    setDate(nextDateKey);
+    setError(null);
+    setActivePicker(null);
+    if (isCreating && nextDateKey === todayDate) {
+      const minimumStart = TIME_OPTIONS.find((option) => option >= getJakartaNowParts().time && option < '23:45');
+      if (minimumStart && startTime < minimumStart) {
+        setStartTime(minimumStart);
+        const nextEnd = TIME_OPTIONS.find((option) => option > minimumStart);
+        if (nextEnd) setEndTime(nextEnd);
+      }
+    }
+  };
+
+  const chooseTime = (target: 'start' | 'end', value: string) => {
+    if (target === 'start') {
+      setStartTime(value);
+      if (endTime <= value) {
+        const nextEnd = TIME_OPTIONS.find((option) => option > value);
+        setEndTime(nextEnd ?? '');
+      }
+    } else {
+      setEndTime(value);
+    }
+    setError(null);
+    setActivePicker(null);
+  };
+
+  const isTimeOptionDisabled = (target: 'start' | 'end', option: string) =>
+    (target === 'start' && option === '23:45') ||
+    (isCreating && date === todayDate && option < getJakartaNowParts().time) ||
+    (target === 'end' && option <= startTime);
 
   const handleSubmit = async () => {
     const selectedClass = classes.find((c) => c.id === selectedClassId);
@@ -156,6 +213,10 @@ function SessionFormContent({
     }
     if (trimmedStart >= trimmedEnd) {
       setError('Waktu mulai harus lebih awal daripada waktu selesai.');
+      return;
+    }
+    if (isCreating && !isSessionStartAllowed(trimmedDate, trimmedStart)) {
+      setError('Untuk sesi baru, tanggal dan waktu mulai harus sekarang atau setelahnya.');
       return;
     }
 
@@ -263,50 +324,110 @@ function SessionFormContent({
           </View>
 
           <View style={styles.field}>
-            <Text style={styles.label}>Tanggal (YYYY-MM-DD)</Text>
-            <TextInput
-              value={date}
-              editable={!submitting}
-              onChangeText={(text) => {
-                setDate(text);
-                setError(null);
+            <Text style={styles.label}>Tanggal Praktikum</Text>
+            <Pressable
+              accessibilityRole="button"
+              disabled={submitting}
+              onPress={() => {
+                setCalendarMonth((current) => {
+                  const selected = dateFromKey(date);
+                  return new Date(selected.getFullYear(), selected.getMonth(), 1);
+                });
+                setActivePicker(activePicker === 'date' ? null : 'date');
               }}
-              placeholder="2026-10-21"
-              placeholderTextColor={AppColors.textMuted}
-              style={styles.input}
-            />
+              style={styles.pickerButton}>
+              <Text style={styles.pickerButtonText}>{formatDateLabel(date)}</Text>
+              <Text style={styles.pickerIcon}>▦</Text>
+            </Pressable>
+            {activePicker === 'date' ? (
+              <View style={styles.pickerPanel}>
+                <View style={styles.calendarHeader}>
+                  <Pressable
+                    accessibilityRole="button"
+                    disabled={isCreating && dateKey(new Date(calendarMonth.getFullYear(), calendarMonth.getMonth(), 1)) <= `${todayDate.slice(0, 8)}01`}
+                    onPress={() => setCalendarMonth((month) => new Date(month.getFullYear(), month.getMonth() - 1, 1))}
+                    style={styles.monthButton}>
+                    <Text style={styles.monthButtonText}>‹</Text>
+                  </Pressable>
+                  <Text style={styles.monthTitle}>{calendarMonth.toLocaleDateString('id-ID', { month: 'long', year: 'numeric' })}</Text>
+                  <Pressable
+                    accessibilityRole="button"
+                    onPress={() => setCalendarMonth((month) => new Date(month.getFullYear(), month.getMonth() + 1, 1))}
+                    style={styles.monthButton}>
+                    <Text style={styles.monthButtonText}>›</Text>
+                  </Pressable>
+                </View>
+                <View style={styles.calendarGrid}>
+                  {['Sen', 'Sel', 'Rab', 'Kam', 'Jum', 'Sab', 'Min'].map((day) => (
+                    <Text key={day} style={styles.weekday}>{day}</Text>
+                  ))}
+                  {Array.from({ length: (new Date(calendarMonth.getFullYear(), calendarMonth.getMonth(), 1).getDay() + 6) % 7 }, (_, index) => (
+                    <View key={`blank-${index}`} style={styles.calendarDay} />
+                  ))}
+                  {Array.from({ length: new Date(calendarMonth.getFullYear(), calendarMonth.getMonth() + 1, 0).getDate() }, (_, index) => {
+                    const dayDate = new Date(calendarMonth.getFullYear(), calendarMonth.getMonth(), index + 1, 12);
+                    const dayKey = dateKey(dayDate);
+                    const disabled = isCreating && dayKey < todayDate;
+                    const selected = dayKey === date;
+                    return (
+                      <Pressable
+                        key={dayKey}
+                        accessibilityRole="button"
+                        accessibilityState={{ selected, disabled }}
+                        disabled={disabled || submitting}
+                        onPress={() => chooseDate(dayDate)}
+                        style={[styles.calendarDay, selected && styles.calendarDaySelected, disabled && styles.calendarDayDisabled]}>
+                        <Text style={[styles.calendarDayText, selected && styles.calendarDayTextSelected, disabled && styles.calendarDayTextDisabled]}>{index + 1}</Text>
+                      </Pressable>
+                    );
+                  })}
+                </View>
+                {isCreating ? <Text style={styles.pickerHint}>Tanggal yang sudah lewat tidak bisa dipilih.</Text> : null}
+              </View>
+            ) : null}
           </View>
 
           <View style={styles.row}>
             <View style={[styles.field, styles.flex]}>
-              <Text style={styles.label}>Waktu Mulai (HH:mm)</Text>
-              <TextInput
-                value={startTime}
-                editable={!submitting}
-                onChangeText={(text) => {
-                  setStartTime(text);
-                  setError(null);
-                }}
-                placeholder="08:00"
-                placeholderTextColor={AppColors.textMuted}
-                style={styles.input}
-              />
+              <Text style={styles.label}>Waktu Mulai</Text>
+              <Pressable disabled={submitting} onPress={() => setActivePicker(activePicker === 'start' ? null : 'start')} style={styles.pickerButton}>
+                <Text style={styles.pickerButtonText}>{startTime || 'Pilih jam'}</Text>
+                <Text style={styles.pickerIcon}>◷</Text>
+              </Pressable>
             </View>
             <View style={[styles.field, styles.flex]}>
-              <Text style={styles.label}>Waktu Selesai (HH:mm)</Text>
-              <TextInput
-                value={endTime}
-                editable={!submitting}
-                onChangeText={(text) => {
-                  setEndTime(text);
-                  setError(null);
-                }}
-                placeholder="10:00"
-                placeholderTextColor={AppColors.textMuted}
-                style={styles.input}
-              />
+              <Text style={styles.label}>Waktu Selesai</Text>
+              <Pressable disabled={submitting || !startTime} onPress={() => setActivePicker(activePicker === 'end' ? null : 'end')} style={styles.pickerButton}>
+                <Text style={styles.pickerButtonText}>{endTime || 'Pilih jam'}</Text>
+                <Text style={styles.pickerIcon}>◷</Text>
+              </Pressable>
             </View>
           </View>
+          {activePicker === 'start' || activePicker === 'end' ? (
+            <View style={styles.pickerPanel}>
+              <Text style={styles.pickerPanelTitle}>{activePicker === 'start' ? 'Pilih Waktu Mulai' : 'Pilih Waktu Selesai'}</Text>
+              <Text style={styles.pickerHint}>
+                {activePicker === 'end' ? 'Jam sebelum waktu mulai dinonaktifkan.' : isCreating && date === todayDate ? 'Pilih waktu sekarang atau setelahnya.' : 'Pilih waktu mulai praktikum.'}
+              </Text>
+              <ScrollView style={styles.timeGrid} contentContainerStyle={styles.timeGridContent} nestedScrollEnabled>
+                {TIME_OPTIONS.map((option) => {
+                  const selected = option === (activePicker === 'start' ? startTime : endTime);
+                  const disabled = isTimeOptionDisabled(activePicker, option);
+                  return (
+                    <Pressable
+                      key={option}
+                      accessibilityRole="button"
+                      accessibilityState={{ selected, disabled }}
+                      disabled={disabled}
+                      onPress={() => chooseTime(activePicker, option)}
+                      style={[styles.timeOption, selected && styles.timeOptionSelected, disabled && styles.timeOptionDisabled]}>
+                      <Text style={[styles.timeOptionText, selected && styles.timeOptionTextSelected, disabled && styles.timeOptionTextDisabled]}>{option}</Text>
+                    </Pressable>
+                  );
+                })}
+              </ScrollView>
+            </View>
+          ) : null}
 
           <View style={styles.field}>
             <Text style={styles.label}>Topik / Materi</Text>
@@ -444,6 +565,43 @@ const styles = StyleSheet.create({
     color: AppColors.text,
     backgroundColor: AppColors.background,
   },
+  pickerButton: {
+    minHeight: 48,
+    borderWidth: 1,
+    borderColor: AppColors.border,
+    borderRadius: Radius.md,
+    paddingHorizontal: Spacing.three,
+    backgroundColor: AppColors.background,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: Spacing.two,
+  },
+  pickerButtonText: { color: AppColors.text, fontSize: 14, fontWeight: '600', flex: 1 },
+  pickerIcon: { color: AppColors.primary, fontSize: 18, fontWeight: '800' },
+  pickerPanel: { borderWidth: 1, borderColor: AppColors.border, borderRadius: Radius.md, padding: Spacing.two, gap: Spacing.two, backgroundColor: AppColors.background },
+  calendarHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  monthButton: { width: 40, height: 40, borderRadius: Radius.md, alignItems: 'center', justifyContent: 'center', backgroundColor: AppColors.surface },
+  monthButtonText: { fontSize: 25, color: AppColors.primary, fontWeight: '700' },
+  monthTitle: { color: AppColors.text, fontSize: 15, fontWeight: '800', textTransform: 'capitalize' },
+  calendarGrid: { flexDirection: 'row', flexWrap: 'wrap' },
+  weekday: { width: '14.2857%', textAlign: 'center', paddingVertical: 8, fontSize: 11, color: AppColors.textMuted, fontWeight: '700' },
+  calendarDay: { width: '14.2857%', height: 38, alignItems: 'center', justifyContent: 'center', borderRadius: Radius.pill },
+  calendarDaySelected: { backgroundColor: AppColors.primary },
+  calendarDayDisabled: { opacity: 0.35 },
+  calendarDayText: { color: AppColors.text, fontSize: 13, fontWeight: '600' },
+  calendarDayTextSelected: { color: AppColors.textOnPrimary, fontWeight: '800' },
+  calendarDayTextDisabled: { color: AppColors.textMuted },
+  pickerHint: { color: AppColors.textMuted, fontSize: 11, lineHeight: 16 },
+  pickerPanelTitle: { color: AppColors.text, fontSize: 14, fontWeight: '800' },
+  timeGrid: { maxHeight: 210 },
+  timeGridContent: { flexDirection: 'row', flexWrap: 'wrap', gap: 6 },
+  timeOption: { minWidth: '22%', flexGrow: 1, paddingVertical: 9, paddingHorizontal: 5, borderWidth: 1, borderColor: AppColors.border, borderRadius: Radius.md, alignItems: 'center', backgroundColor: AppColors.surface },
+  timeOptionSelected: { borderColor: AppColors.primary, backgroundColor: AppColors.primary },
+  timeOptionDisabled: { opacity: 0.35 },
+  timeOptionText: { color: AppColors.text, fontSize: 12, fontWeight: '700' },
+  timeOptionTextSelected: { color: AppColors.textOnPrimary },
+  timeOptionTextDisabled: { color: AppColors.textMuted },
   chipRow: {
     flexDirection: 'row',
     flexWrap: 'wrap',

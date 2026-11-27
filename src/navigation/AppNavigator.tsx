@@ -35,7 +35,7 @@ export const navigateTo = {
     router.push({ pathname: '/assistant/session/[sessionId]', params: { assistantId, sessionId } }),
   assistantRecap: (assistantId: string, sessionId?: string) =>
     router.push({ pathname: '/assistant/recap', params: { assistantId, sessionId } }),
-  aslabHome: () => router.push('/aslab/index'),
+  aslabHome: () => router.push('/aslab'),
 };
 
 export default function AppNavigator() {
@@ -52,7 +52,7 @@ export default function AppNavigator() {
       : role === 'asisten'
         ? '/assistant'
         : role === 'aslab'
-          ? '/aslab/index'
+          ? '/aslab'
           : '/';
 
   return (
@@ -74,7 +74,7 @@ export default function AppNavigator() {
       {/* Alur praktikan */}
       <Stack.Protected
         guard={isStudent}
-        redirectTo={isAssistant ? '/assistant' : isLabAssistant ? '/aslab/index' : '/'}>
+        redirectTo={isAssistant ? '/assistant' : isLabAssistant ? '/aslab' : '/'}>
         <Stack.Screen
           name="student/index"
           options={{ title: 'Beranda Praktikan', headerBackVisible: false }}
@@ -94,7 +94,7 @@ export default function AppNavigator() {
       {/* Alur asisten */}
       <Stack.Protected
         guard={isAssistant}
-        redirectTo={isStudent ? '/student' : isLabAssistant ? '/aslab/index' : '/'}>
+        redirectTo={isStudent ? '/student' : isLabAssistant ? '/aslab' : '/'}>
         <Stack.Screen
           name="assistant/index"
           options={{ title: 'Dashboard Asisten', headerBackVisible: false }}

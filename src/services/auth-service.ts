@@ -37,7 +37,7 @@ export interface ValidationErrors {
 }
 
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-const NIM_PATTERN = /^[0-9A-Za-z.-]{5,20}$/;
+const NIM_PATTERN = /^\d{5,20}$/;
 const WRITE_TIMEOUT_MS = 15000;
 
 export function validateLogin(email: string, password: string): ValidationErrors {

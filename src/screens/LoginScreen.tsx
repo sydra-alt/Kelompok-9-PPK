@@ -175,9 +175,11 @@ export default function LoginScreen() {
               <TextInput
                 value={profileNim}
                 editable={!submitting}
-                onChangeText={setProfileNim}
+                onChangeText={(text) => setProfileNim(text.replace(/\D/g, ''))}
                 placeholder="Contoh: 2211102001"
                 placeholderTextColor={AppColors.textMuted}
+                keyboardType="number-pad"
+                autoCapitalize="none"
                 style={[styles.input, fieldErrors.identifier && styles.inputError]}
               />
               {fieldErrors.identifier ? (
