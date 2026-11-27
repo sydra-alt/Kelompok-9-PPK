@@ -12,6 +12,7 @@ import {
 } from 'react-native';
 import { WebView, type WebViewMessageEvent } from 'react-native-webview';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useNetInfo } from '@react-native-community/netinfo';
 
 import { AppButton } from '@/components/AppButton';
 import { AnimatedModal, ModalMotion } from '@/components/ModalMotion';
@@ -19,14 +20,14 @@ import { EmptyState } from '@/components/EmptyState';
 import { AppColors, CardShadow, Radius } from '@/constants/app-theme';
 import { Spacing } from '@/constants/theme';
 import { useAuth } from '@/context/AuthContext';
-import { useStudentData } from '@/context/StudentDataContext';
 import { ConnectionBanner } from '@/components/ConnectionBanner';
 import { getErrorMessage } from '@/services/errors';
 import { getCurrentDeviceLocation, watchDeviceLocation } from '@/services/location-service';
-import { subscribeLabs } from '@/services/student-data-service';
+import { subscribeAllSessions, subscribeLabs } from '@/services/student-data-service';
 import type { Lab, PracticeSession } from '@/types';
 import type { Coordinates } from '@/utils/distance';
 import { nowLocalDateTime, formatDate, formatTimeRange } from '@/utils/format';
+import { isWithinSessionWindow } from '@/utils/session-time';
 
 const GOOGLE_MAPS_API_KEY = Constants.expoConfig?.extra?.googleMapsApiKey;
 
@@ -165,14 +166,18 @@ function createGoogleMapsHtml(apiKey: string) {
 
 export default function StudentLabsMapScreen() {
   const { profile } = useAuth();
+  const netInfo = useNetInfo();
   const insets = useSafeAreaInsets();
-  const { sessions, error: studentDataError, fromCache, isOffline, retry } = useStudentData();
   const mapRef = useRef<WebView<object> | null>(null);
   const [labs, setLabs] = useState<Lab[]>([]);
   const [labsLoading, setLabsLoading] = useState(true);
   const [labsError, setLabsError] = useState<string | null>(null);
   const [labsFromCache, setLabsFromCache] = useState(false);
   const [labsRetryKey, setLabsRetryKey] = useState(0);
+  const [sessions, setSessions] = useState<PracticeSession[]>([]);
+  const [sessionsError, setSessionsError] = useState<string | null>(null);
+  const [sessionsFromCache, setSessionsFromCache] = useState(false);
+  const [sessionsRetryKey, setSessionsRetryKey] = useState(0);
   const [selectedLabId, setSelectedLabId] = useState<string | null>(null);
   const [deviceLocation, setDeviceLocation] = useState<Coordinates | null>(null);
   const [locationError, setLocationError] = useState<string | null>(null);
@@ -197,6 +202,15 @@ export default function StudentLabsMapScreen() {
       },
     );
   }, [labsRetryKey]);
+
+  useEffect(() => subscribeAllSessions(
+    (nextSessions, meta) => {
+      setSessions(nextSessions);
+      setSessionsFromCache(meta.fromCache);
+      setSessionsError(null);
+    },
+    (error) => setSessionsError(getErrorMessage(error, 'Jadwal seluruh laboratorium tidak dapat dimuat.')),
+  ), [sessionsRetryKey]);
 
   useEffect(() => {
     let active = true;
@@ -266,7 +280,7 @@ export default function StudentLabsMapScreen() {
   const activity = useMemo(() => {
     if (!selectedLab) return { active: [], next: null };
     const related = sessions.filter((session) => session.labId === selectedLab.id);
-    const active = related.filter((session) => session.status === 'open');
+    const active = related.filter((session) => session.status === 'open' && isWithinSessionWindow(session));
     const currentTime = nowLocalDateTime().slice(0, 16);
     const next = related
       .filter(
@@ -281,15 +295,15 @@ export default function StudentLabsMapScreen() {
     setLabsError(null);
     setLabsLoading(true);
     setLabsRetryKey((key) => key + 1);
-    retry();
+    setSessionsRetryKey((key) => key + 1);
   };
 
-  if (!profile || profile.role !== 'praktikan') {
+  if (!profile) {
     return (
       <EmptyState
         icon="🗺️"
-        title="Akses Praktikan Diperlukan"
-        message="Masuk dengan akun praktikan untuk melihat peta laboratorium."
+        title="Masuk diperlukan"
+        message="Masuk ke aplikasi untuk melihat peta laboratorium."
         actionLabel="Kembali"
         onAction={() => router.back()}
       />
@@ -320,9 +334,9 @@ export default function StudentLabsMapScreen() {
 
       <View pointerEvents="box-none" style={styles.topOverlay}>
         <ConnectionBanner
-          isOffline={isOffline}
-          fromCache={fromCache || labsFromCache}
-          error={labsError ?? studentDataError}
+          isOffline={netInfo.isConnected === false}
+          fromCache={labsFromCache || sessionsFromCache}
+          error={labsError ?? sessionsError}
           onRetry={retryMapData}
         />
         {labsLoading && labs.length === 0 ? (
@@ -422,7 +436,7 @@ export default function StudentLabsMapScreen() {
                       statusLabel="Dibuka"
                       onPress={() => {
                         setSelectedLabId(null);
-                        router.push({ pathname: '/student/session/[sessionId]', params: { sessionId: session.id } });
+                        if (profile.role === 'praktikan') router.push({ pathname: '/student/session/[sessionId]', params: { sessionId: session.id } });
                       }}
                     />
                   ))
@@ -438,7 +452,7 @@ export default function StudentLabsMapScreen() {
                     statusLabel="Terjadwal"
                     onPress={() => {
                       setSelectedLabId(null);
-                      router.push({ pathname: '/student/session/[sessionId]', params: { sessionId: activity.next!.id } });
+                      if (profile.role === 'praktikan') router.push({ pathname: '/student/session/[sessionId]', params: { sessionId: activity.next!.id } });
                     }}
                   />
                 ) : (

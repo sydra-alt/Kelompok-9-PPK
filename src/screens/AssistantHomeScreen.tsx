@@ -1,5 +1,5 @@
-import { useLocalSearchParams } from 'expo-router';
-import { useMemo, useState } from 'react';
+import { router, useLocalSearchParams } from 'expo-router';
+import { useEffect, useMemo, useState } from 'react';
 import {
   FlatList,
   Linking,
@@ -111,6 +111,12 @@ export default function AssistantHomeScreen() {
   const [registeringNotifications, setRegisteringNotifications] = useState(false);
   const [notificationFeedback, setNotificationFeedback] = useState<string | null>(null);
   const [notificationSettingsAvailable, setNotificationSettingsAvailable] = useState(false);
+
+  useEffect(() => {
+    if (!notificationFeedback) return undefined;
+    const timer = setTimeout(() => setNotificationFeedback(null), 5000);
+    return () => clearTimeout(timer);
+  }, [notificationFeedback]);
 
   const handleRegisterNotifications = async () => {
     if (!profile || registeringNotifications) return;
@@ -980,6 +986,15 @@ export default function AssistantHomeScreen() {
           onConfirm={() => void handleConfirmToggleSession()}
         />
       ) : null}
+      <Pressable
+        testID="session-qr-fab"
+        accessibilityRole="button"
+        accessibilityLabel="Tampilkan QR sesi praktikum"
+        onPress={() => router.push('/assistant/qr' as any)}
+        style={({ pressed }) => [styles.qrFab, pressed && styles.qrFabPressed]}>
+        <Text style={styles.qrFabIcon}>▦</Text>
+        <Text style={styles.qrFabText}>QR Presensi</Text>
+      </Pressable>
     </View>
   );
 }
@@ -1002,6 +1017,15 @@ function Stat({
 }
 
 const styles = StyleSheet.create({
+  qrFab: {
+    position: 'absolute', right: Spacing.three, bottom: Spacing.three,
+    minHeight: 54, borderRadius: Radius.pill, paddingHorizontal: Spacing.four,
+    flexDirection: 'row', alignItems: 'center', gap: 8,
+    backgroundColor: AppColors.primary, ...CardShadow,
+  },
+  qrFabPressed: { opacity: 0.82, transform: [{ scale: 0.98 }] },
+  qrFabIcon: { color: AppColors.textOnPrimary, fontSize: 22, fontWeight: '800' },
+  qrFabText: { color: AppColors.textOnPrimary, fontSize: 14, fontWeight: '800' },
   root: {
     flex: 1,
     backgroundColor: AppColors.background,

@@ -1,5 +1,5 @@
 import { StatusBar } from 'expo-status-bar';
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { FlatList, Linking, Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { AppButton } from '@/components/AppButton';
@@ -52,6 +52,12 @@ export default function StudentHomeScreen() {
   const [registeringNotifications, setRegisteringNotifications] = useState(false);
   const [notificationFeedback, setNotificationFeedback] = useState<string | null>(null);
   const [notificationSettingsAvailable, setNotificationSettingsAvailable] = useState(false);
+
+  useEffect(() => {
+    if (!notificationFeedback) return undefined;
+    const timer = setTimeout(() => setNotificationFeedback(null), 5000);
+    return () => clearTimeout(timer);
+  }, [notificationFeedback]);
 
   const handleRegisterNotifications = async () => {
     if (!profile || registeringNotifications) return;
@@ -130,7 +136,7 @@ export default function StudentHomeScreen() {
   const openCount = sessions.filter((s) => s.status === 'open').length;
 
   return (
-    <>
+    <View style={styles.root}>
       <StatusBar style="dark" />
       <FlatList
         data={filteredSessions}
@@ -343,7 +349,16 @@ export default function StudentHomeScreen() {
           )
         }
       />
-    </>
+      <Pressable
+        testID="scan-attendance-qr-fab"
+        accessibilityRole="button"
+        accessibilityLabel="Scan QR presensi"
+        onPress={navigateTo.studentQrScanner}
+        style={({ pressed }) => [styles.qrFab, pressed && styles.qrFabPressed]}>
+        <Text style={styles.qrFabIcon}>▦</Text>
+        <Text style={styles.qrFabText}>Scan QR</Text>
+      </Pressable>
+    </View>
   );
 }
 
@@ -357,6 +372,16 @@ function Stat({ label, value }: { label: string; value: number }) {
 }
 
 const styles = StyleSheet.create({
+  root: { flex: 1, backgroundColor: AppColors.background },
+  qrFab: {
+    position: 'absolute', right: Spacing.three, bottom: Spacing.three,
+    minHeight: 54, borderRadius: Radius.pill, paddingHorizontal: Spacing.four,
+    flexDirection: 'row', alignItems: 'center', gap: 8,
+    backgroundColor: AppColors.primary, ...CardShadow,
+  },
+  qrFabPressed: { opacity: 0.82, transform: [{ scale: 0.98 }] },
+  qrFabIcon: { color: AppColors.textOnPrimary, fontSize: 22, fontWeight: '800' },
+  qrFabText: { color: AppColors.textOnPrimary, fontSize: 14, fontWeight: '800' },
   listContent: {
     width: '100%',
     maxWidth: 720,

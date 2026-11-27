@@ -1,3 +1,4 @@
+import { useEffect, useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { AppColors, Radius } from '@/constants/app-theme';
@@ -22,6 +23,15 @@ interface FeedbackBannerProps {
 /** Banner umpan balik berhasil / gagal / informasi. */
 export function FeedbackBanner({ type, title, message, onClose, testID }: FeedbackBannerProps) {
   const meta = META[type];
+  const [dismissedMessage, setDismissedMessage] = useState<string | null>(null);
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      if (onClose) onClose();
+      else setDismissedMessage(message);
+    }, 5000);
+    return () => clearTimeout(timer);
+  }, [message, onClose]);
+  if (dismissedMessage === message) return null;
   return (
     <View
       testID={testID}
@@ -33,7 +43,7 @@ export function FeedbackBanner({ type, title, message, onClose, testID }: Feedba
         <Text style={styles.message}>{message}</Text>
       </View>
       {onClose ? (
-        <Pressable onPress={onClose} hitSlop={12} accessibilityLabel="Tutup pesan">
+        <Pressable onPress={() => { setDismissedMessage(message); onClose?.(); }} hitSlop={12} accessibilityLabel="Tutup pesan">
           <Text style={[styles.close, { color: meta.color }]}>✕</Text>
         </Pressable>
       ) : null}

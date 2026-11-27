@@ -174,6 +174,19 @@ export function subscribeSessionsForClasses(
   );
 }
 
+/** Semua sesi untuk informasi jadwal laboratorium yang terlihat lintas kelas. */
+export function subscribeAllSessions(
+  onData: OnData<PracticeSession[]>,
+  onError: OnError,
+): Unsubscribe {
+  return onSnapshot(
+    collection(getDb(), COLLECTIONS.sessions),
+    { includeMetadataChanges: true },
+    (snap) => onData(snap.docs.map(toPracticeSession).sort(bySchedule), { fromCache: snap.metadata.fromCache }),
+    onError,
+  );
+}
+
 /** Satu sesi (real-time) — dipakai layar detail untuk perubahan status buka/tutup. */
 export function subscribeSession(
   sessionId: string,

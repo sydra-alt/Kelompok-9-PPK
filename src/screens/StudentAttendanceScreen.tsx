@@ -1,11 +1,14 @@
 import { router, useLocalSearchParams } from 'expo-router';
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import Constants from 'expo-constants';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Linking, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { WebView } from 'react-native-webview';
 
 import { AppButton } from '@/components/AppButton';
 import { ConnectionBanner } from '@/components/ConnectionBanner';
 import { AnimatedModal, ModalMotion } from '@/components/ModalMotion';
 import { EmptyState } from '@/components/EmptyState';
+import { FeedbackBanner } from '@/components/FeedbackBanner';
 import { LoadingState } from '@/components/LoadingState';
 import { StatusBadge } from '@/components/StatusBadge';
 import { AppColors, CardShadow, Radius } from '@/constants/app-theme';
@@ -14,12 +17,24 @@ import { useAuth } from '@/context/AuthContext';
 import { useStudentData } from '@/context/StudentDataContext';
 import { submitAttendance, getAttendanceBlockReason } from '@/services/attendance-service';
 import { getErrorMessage } from '@/services/errors';
-import { getCurrentDeviceLocation } from '@/services/location-service';
+import { getCurrentDeviceLocation, watchDeviceLocation } from '@/services/location-service';
 import { subscribeLab, subscribeSession } from '@/services/student-data-service';
 import type { Lab, PracticeSession } from '@/types';
 import type { Coordinates } from '@/utils/distance';
 import { distanceInMeters } from '@/utils/distance';
 import { formatDate, formatTimeRange } from '@/utils/format';
+
+const MAPS_KEY = Constants.expoConfig?.extra?.googleMapsApiKey;
+
+function createAttendanceMapHtml(apiKey: string) {
+  return `<!doctype html><html><head><meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no"><style>html,body,#map{height:100%;width:100%;margin:0;padding:0}</style></head><body><div id="map"></div><script>
+  let map, labMarker, deviceMarker, radiusCircle;window.mapPayload=null;
+  window.initMap=()=>{map=new google.maps.Map(document.getElementById('map'),{center:{lat:-7.05436,lng:110.43553},zoom:16,clickableIcons:false,fullscreenControl:false,mapTypeControl:false,streetViewControl:false,gestureHandling:'greedy'});if(window.mapPayload)window.updateAttendanceMap(window.mapPayload)};
+  window.updateAttendanceMap=(data)=>{window.mapPayload=data;if(!map||!data)return;const lab={lat:data.lab.latitude,lng:data.lab.longitude};if(!labMarker)labMarker=new google.maps.Marker({map,position:lab,title:data.lab.name});else labMarker.setPosition(lab);if(radiusCircle)radiusCircle.setMap(null);radiusCircle=new google.maps.Circle({map,center:lab,radius:data.lab.radiusMeters,strokeColor:'#4f46e5',strokeOpacity:.85,strokeWeight:2,fillColor:'#4f46e5',fillOpacity:.13,clickable:false});const bounds=new google.maps.LatLngBounds();bounds.extend(lab);if(data.device){const pos={lat:data.device.latitude,lng:data.device.longitude};bounds.extend(pos);if(!deviceMarker)deviceMarker=new google.maps.Marker({map,position:pos,title:'Lokasi perangkat',icon:{path:google.maps.SymbolPath.CIRCLE,scale:8,fillColor:'#15803d',fillOpacity:1,strokeColor:'#fff',strokeWeight:2},zIndex:1000});else deviceMarker.setPosition(pos);}else if(deviceMarker){deviceMarker.setMap(null);deviceMarker=null;}map.fitBounds(bounds,56)};
+  window.gm_authFailure=()=>window.ReactNativeWebView&&window.ReactNativeWebView.postMessage('Google Maps menolak API key atau kuotanya habis.');
+  const script=document.createElement('script');script.src=${JSON.stringify(`https://maps.googleapis.com/maps/api/js?key=${encodeURIComponent(apiKey)}&callback=initMap`)};script.async=true;script.onerror=()=>window.ReactNativeWebView&&window.ReactNativeWebView.postMessage('Peta gagal dimuat. Periksa koneksi internet dan Maps API key.');document.head.appendChild(script);
+  </script></body></html>`;
+}
 
 export default function StudentAttendanceScreen() {
   const { sessionId } = useLocalSearchParams<{ sessionId: string }>();
@@ -37,6 +52,8 @@ export default function StudentAttendanceScreen() {
   const [submitting, setSubmitting] = useState(false);
   const [feedback, setFeedback] = useState<string | null>(null);
   const [successModalMessage, setSuccessModalMessage] = useState<string | null>(null);
+  const mapRef = useRef<WebView<object> | null>(null);
+  const [mapError, setMapError] = useState<string | null>(null);
 
   const session = sessionSnapshot ?? sessions.find((item) => item.id === sessionId) ?? null;
   const labState = session?.labId && labSnapshot?.labId === session.labId ? labSnapshot : null;
@@ -55,6 +72,33 @@ export default function StudentAttendanceScreen() {
       () => setSessionSnapshot(null),
     );
   }, [sessionId]);
+
+  useEffect(() => {
+    const sessionKey = session?.id;
+    const labKey = lab?.id;
+    if (!sessionKey || !labKey) return undefined;
+    let active = true;
+    let subscription: { remove: () => void } | null = null;
+    void getCurrentDeviceLocation()
+      .then((current) => {
+        if (!active) return null;
+        setDeviceLocation(current);
+        return watchDeviceLocation(
+          (next) => { if (active) { setDeviceLocation(next); setLocationError(null); } },
+          (message) => { if (active) { setDeviceLocation(null); setLocationError(message); } },
+        );
+      })
+      .then((nextSubscription) => {
+        if (!nextSubscription) return;
+        if (active) subscription = nextSubscription;
+        else nextSubscription.remove();
+      })
+      .catch((error: unknown) => {
+        if (active) setLocationError(getErrorMessage(error, 'Lokasi tidak dapat diperoleh. Aktifkan GPS lalu coba lagi.'));
+      })
+      .finally(() => { if (active) setCheckingLocation(false); });
+    return () => { active = false; subscription?.remove(); };
+  }, [session?.id, session?.labId, lab?.id]);
 
   useEffect(() => {
     if (!session?.labId) return undefined;
@@ -109,6 +153,15 @@ export default function StudentAttendanceScreen() {
       !permissionApproved,
   );
 
+  useEffect(() => {
+    if (!lab) return;
+    const payload = JSON.stringify({
+      lab: { latitude: lab.latitude, longitude: lab.longitude, name: lab.name, radiusMeters: lab.radiusMeters },
+      device: deviceLocation,
+    }).replace(/</g, '\\u003c');
+    mapRef.current?.injectJavaScript(`window.updateAttendanceMap && window.updateAttendanceMap(${payload}); true;`);
+  }, [deviceLocation, lab]);
+
   const handleSubmit = async () => {
     if (!profile || !session || submitting || !canSubmit) return;
     setSubmitting(true);
@@ -155,6 +208,7 @@ export default function StudentAttendanceScreen() {
     <>
     <ScrollView contentContainerStyle={styles.content}>
       <ConnectionBanner isOffline={isOffline} fromCache={fromCache} error={null} />
+      {feedback ? <FeedbackBanner type="error" title="Presensi gagal" message={feedback} onClose={() => setFeedback(null)} /> : null}
 
       <View style={styles.card}>
         <View style={styles.titleRow}>
@@ -169,6 +223,17 @@ export default function StudentAttendanceScreen() {
         <InfoRow label="Waktu" value={formatTimeRange(session.startTime, session.endTime)} />
         <InfoRow label="Laboratorium" value={lab?.name ?? session.labName ?? 'Belum ditautkan'} />
         {session.room ? <InfoRow label="Ruangan" value={session.room} /> : null}
+      </View>
+
+      <View style={styles.mapCard}>
+        <View style={styles.mapHeader}><Text style={styles.sectionTitle}>Lokasi presensi</Text><Text style={styles.hint}>Posisi perangkat akan mengikuti pergerakan Anda.</Text></View>
+        {lab && MAPS_KEY ? (
+          <WebView ref={mapRef} style={styles.attendanceMap} originWhitelist={['*']} source={{ html: createAttendanceMapHtml(MAPS_KEY) }} javaScriptEnabled domStorageEnabled scrollEnabled={false} onMessage={(event) => setMapError(event.nativeEvent.data)} onError={(event) => setMapError(event.nativeEvent.description || 'Peta gagal dimuat. Periksa koneksi internet.')} onHttpError={(event) => setMapError(`Peta gagal dimuat (HTTP ${event.nativeEvent.statusCode}).`)} onLoadEnd={() => {
+            const payload = JSON.stringify({ lab: { latitude: lab.latitude, longitude: lab.longitude, name: lab.name, radiusMeters: lab.radiusMeters }, device: deviceLocation }).replace(/</g, '\\u003c');
+            mapRef.current?.injectJavaScript(`window.updateAttendanceMap && window.updateAttendanceMap(${payload}); true;`);
+          }} />
+        ) : <View style={styles.mapFallback}><Text style={styles.hint}>{lab ? 'Peta belum dapat ditampilkan karena Maps API key belum dikonfigurasi.' : 'Memuat lokasi laboratorium…'}</Text></View>}
+        {mapError ? <Text style={styles.mapError}>{mapError}</Text> : null}
       </View>
 
       <View style={styles.card}>
@@ -196,8 +261,6 @@ export default function StudentAttendanceScreen() {
           <Text style={styles.hint}>Periksa lokasi untuk melihat jarak Anda dari laboratorium.</Text>
         ) : null}
 
-        {feedback ? <Notice tone={feedback.startsWith('Presensi berhasil') ? 'success' : 'danger'} message={feedback} /> : null}
-
         <AppButton
           title={checkingLocation ? 'Memeriksa lokasi...' : deviceLocation ? 'Periksa Lokasi Lagi' : 'Periksa Lokasi'}
           variant="secondary"
@@ -217,6 +280,7 @@ export default function StudentAttendanceScreen() {
           disabled={!canSubmit || submitting}
           onPress={() => void handleSubmit()}
         />
+        <AppButton title="Scan QR presensi" variant="ghost" onPress={() => router.push('/student/scan' as any)} />
       </View>
     </ScrollView>
     <AnimatedModal
@@ -286,6 +350,11 @@ const styles = StyleSheet.create({
   subtitle: { fontSize: 14, color: AppColors.textMuted },
   divider: { height: 1, backgroundColor: AppColors.border },
   sectionTitle: { fontSize: 17, fontWeight: '800', color: AppColors.text },
+  mapCard: { backgroundColor: AppColors.surface, borderRadius: Radius.lg, borderWidth: 1, borderColor: AppColors.border, padding: Spacing.three, gap: Spacing.two, ...CardShadow },
+  mapHeader: { gap: 3 },
+  attendanceMap: { height: 260, borderRadius: Radius.md, overflow: 'hidden' },
+  mapFallback: { height: 180, alignItems: 'center', justifyContent: 'center', padding: Spacing.three, backgroundColor: AppColors.background, borderRadius: Radius.md },
+  mapError: { color: AppColors.danger, fontSize: 12, lineHeight: 18 },
   infoRow: { flexDirection: 'row', justifyContent: 'space-between', gap: Spacing.three },
   infoLabel: { fontSize: 13, color: AppColors.textMuted },
   infoValue: { flex: 1, textAlign: 'right', fontSize: 13, fontWeight: '600', color: AppColors.text },

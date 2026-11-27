@@ -32,6 +32,15 @@
           "locationWhenInUsePermission": "Izinkan aplikasi menggunakan lokasi saat presensi dan menampilkan posisi Anda di peta."
         }
       ],
+      [
+        "expo-camera",
+        {
+          "cameraPermission": "Izinkan aplikasi menggunakan kamera untuk memindai QR presensi.",
+          "microphonePermission": "Mikrofon tidak digunakan oleh aplikasi.",
+          "recordAudioAndroid": false,
+          "barcodeScannerEnabled": true
+        }
+      ],
       "expo-notifications",
       [
         "expo-splash-screen",

@@ -1,4 +1,5 @@
 import { router, Stack } from 'expo-router';
+import { Pressable, Text } from 'react-native';
 
 import { AppColors } from '@/constants/app-theme';
 import { useAuth } from '@/context/AuthContext';
@@ -24,6 +25,9 @@ export const navigateTo = {
   studentAttendance: (sessionId: string) =>
     router.push({ pathname: '/student/attendance/[sessionId]' as any, params: { sessionId } }),
   studentLabsMap: () => router.push('/student/maps' as any),
+  labsMap: () => router.push('/maps' as any),
+  studentQrScanner: () => router.push('/student/scan' as any),
+  assistantQr: () => router.push('/assistant/qr' as any),
   studentHistory: (studentId?: string) =>
     router.push({ pathname: '/student/history', params: studentId ? { studentId } : undefined }),
   studentFines: () => router.push('/student/fines' as any),
@@ -65,11 +69,21 @@ export default function AppNavigator() {
         headerShadowVisible: false,
         contentStyle: { backgroundColor: AppColors.background },
         headerBackTitle: 'Kembali',
+        headerRight: isAuthenticated ? () => (
+          <Pressable onPress={navigateTo.labsMap} accessibilityRole="button" accessibilityLabel="Buka peta laboratorium" style={{ paddingHorizontal: 8, paddingVertical: 6 }}>
+            <Text style={{ color: AppColors.primary, fontWeight: '700' }}>Peta</Text>
+          </Pressable>
+        ) : undefined,
       }}>
       {/* Rute autentikasi — hanya aktif sebelum profil terautentikasi penuh */}
       <Stack.Protected guard={!isAuthenticated} redirectTo={homeRoute}>
         <Stack.Screen name="index" options={{ headerShown: false }} />
         <Stack.Screen name="register" options={{ title: 'Registrasi Praktikan' }} />
+      </Stack.Protected>
+
+      {/* Peta laboratorium adalah informasi bersama dan dapat dibuka oleh semua role. */}
+      <Stack.Protected guard={isAuthenticated} redirectTo="/">
+        <Stack.Screen name="maps" options={{ title: 'Peta Laboratorium' }} />
       </Stack.Protected>
 
       {/* Alur praktikan */}
@@ -90,6 +104,7 @@ export default function AppNavigator() {
         <Stack.Screen name="student/fines" options={{ title: 'Tagihan Denda' }} />
         <Stack.Screen name="student/payments" options={{ title: 'Riwayat Pembayaran' }} />
         <Stack.Screen name="student/permissions" options={{ title: 'Pengajuan Izin' }} />
+        <Stack.Screen name="student/scan" options={{ title: 'Scan QR Presensi', headerShown: false }} />
       </Stack.Protected>
 
       {/* Alur asisten */}
@@ -102,6 +117,7 @@ export default function AppNavigator() {
         />
         <Stack.Screen name="assistant/session/[sessionId]" options={{ title: 'Kelola Sesi' }} />
         <Stack.Screen name="assistant/recap" options={{ title: 'Rekap Kehadiran' }} />
+        <Stack.Screen name="assistant/qr" options={{ title: 'QR Presensi Sesi' }} />
       </Stack.Protected>
 
       {/* Aslab adalah role tersendiri dan berada di atas asisten. */}
